@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>HCR Multi-Scenario Physics Trace (JS reference)</title>
+<style>
+  body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #ddd; }
+  pre { background: #000; color: #0f0; padding: 10px; max-height: 400px; overflow: auto; }
+  a.download { display: inline-block; padding: 10px 20px; background: #28a; color: white; text-decoration: none; border-radius: 4px; }
+  .meta { color: #ffa; }
+</style>
+</head>
+<body>
+<h1>Hill Climb Racing — multi-scenario JS reference trace</h1>
+<p>Runs 3 physics scenarios with the original JS Car/Wheel/Person classes and bundles them into one JSON.
+Each scenario isolates a different physics aspect, so the Python tuner can match them all simultaneously
+instead of overfitting to one trajectory.</p>
+
+<ul>
+  <li><b>cruise_flat</b> — flat ground, pure forward throttle. Pins down friction × motor balance.</li>
+  <li><b>climb_ramp</b> — 19° upward ramp, full throttle. Pins down motor torque and slip behavior on slopes.</li>
+  <li><b>bump_coast</b> — single 40px bump on flat ground, pure forward. Pins down suspension freq/damp.</li>
+</ul>
+
+<p class="meta" id="status">Loading...</p>
+<pre id="output"></pre>
+<a id="download" class="download" style="display:none">Download trace_js_multi.json</a>
+
+<script src="../web/libraries/Box2d.js"></script>
+<script>
+// ---- p5.js helper polyfills (Car/Wheel/Person.js use these) ----
+function createVector(x, y) { return { x: x, y: y }; }
+function color() { return null; }
+var canvas = { width: 1280, height: 720 };
+var PI = Math.PI;
+var TWO_PI = 2 * Math.PI;
+function abs(x)   { return Math.abs(x); }
+function floor(x) { return Math.floor(x); }
+function min(a,b) { return Math.min(a,b); }
+function max(a,b) { return Math.max(a,b); }
+function map(v,a,b,c,d) { return c + (d-c) * ((v-a)/(b-a)); }
+function constrain(v,lo,hi) { return Math.min(hi, Math.max(lo, v)); }
+
+var panX = 0, panY = 0, nextPanX = 0;
+var humanPlaying = true;
+var fightMode = false;
+var humanPlayer = null;
+var reset = false;
+var SCALE = 30;
+
+var Vec2 = Box2D.Common.Math.b2Vec2;
+var b2BodyDef = Box2D.Dynamics.b2BodyDef;
+var b2Body = Box2D.Dynamics.b2Body;
+var b2FixtureDef = Box2D.Dynamics.b2FixtureDef;
+var b2World = Box2D.Dynamics.b2World;
+var b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape;
+var b2CircleShape = Box2D.Collision.Shapes.b2CircleShape;
+var b2StaticBody = Box2D.Dynamics.b2Body.b2_staticBody;
+var b2DynamicBody = Box2D.Dynamics.b2Body.b2_dynamicBody;
+var b2RevoluteJointDef = Box2D.Dynamics.Joints.b2RevoluteJointDef;
+var b2PrismaticJointDef = Box2D.Dynamics.Joints.b2PrismaticJointDef;
+var b2FilterData = Box2D.Dynamics.b2FilterData;
+var b2DistanceJointDef = Box2D.Dynamics.Joints.b2DistanceJointDef;
+
+var WHEEL_CATEGORY  = 0x0001;
+var CHASSIS_CATEGORY= 0x0002;
+var GRASS_CATEGORY  = 0x0004;
+var DIRT_CATEGORY   = 0x0008;
+var PERSON_CATEGORY = 0x0010;
+var WHEEL_MASK   = GRASS_CATEGORY;
+var CHASSIS_MASK = DIRT_CATEGORY;
+var GRASS_MASK   = WHEEL_CATEGORY | PERSON_CATEGORY;
+var DIRT_MASK    = CHASSIS_CATEGORY;
+var PERSON_MASK  = GRASS_CATEGORY;
+</script>
+
+<script src="../web/Wheel.js"></script>
+<script src="../web/Person.js"></script>
+<script src="../web/Car.js"></script>
+
+<script>
+// ---------------------------------------------------------------------------
+// Terrain generators
+// ---------------------------------------------------------------------------
+function terrainFlat() {
+  // Just a flat ground at y=600, 4000px long.
+  var verts = [];
+  for (var x = 0; x <= 4000; x += 100) verts.push([x, 600]);
+  return verts;
+}
+
+function terrainRamp() {
+  // Flat for 500px so spawn is sane, then a 19-degree upward ramp.
+  // "up" in y-down is decreasing y. slope = tan(19deg) ≈ 0.344.
+  var verts = [];
+  for (var x = 0; x <= 4000; x += 50) {
+    var y;
+    if (x < 500) y = 600;
+    else y = 600 - 0.344 * (x - 500);
+    verts.push([x, y]);
+  }
+  return verts;
+}
+
+function terrainBump() {
+  // Flat with a single Gaussian bump centered at x=1500, 40px high, ~200px wide.
+  var verts = [];
+  for (var x = 0; x <= 4000; x += 25) {
+    var d = x - 1500;
+    var y = 600 - 40 * Math.exp(-(d * d) / (2 * 80 * 80));  // sigma=80px
+    verts.push([x, y]);
+  }
+  return verts;
+}
+
+// ---------------------------------------------------------------------------
+// World setup (mirrors Ground.js setBodies)
+// ---------------------------------------------------------------------------
+function setupTerrain(world, verts) {
+  var bd = new b2BodyDef();
+  bd.type = b2StaticBody;
+  var body = world.CreateBody(bd);
+  body.SetUserData({ id: "ground" });
+
+  function addEdgeSegment(yOffset, mask, cat) {
+    for (var i = 1; i < verts.length; i++) {
+      var fd = new b2FixtureDef();
+      fd.friction = 0.99;
+      fd.restitution = 0.1;
+      fd.shape = new b2PolygonShape();
+      fd.shape.SetAsEdge(
+        new Vec2(verts[i - 1][0] / SCALE, (verts[i - 1][1] + yOffset) / SCALE),
+        new Vec2(verts[i][0] / SCALE,     (verts[i][1] + yOffset) / SCALE)
+      );
+      var ft = new b2FilterData();
+      ft.categoryBits = cat;
+      ft.maskBits = mask;
+      body.CreateFixture(fd).SetFilterData(ft);
+    }
+  }
+  addEdgeSegment(0,  DIRT_MASK,  DIRT_CATEGORY);
+  addEdgeSegment(-5, GRASS_MASK, GRASS_CATEGORY);
+  return body;
+}
+
+function record(car, tick) {
+  var cp = car.chassisBody.GetPosition();
+  var cv = car.chassisBody.GetLinearVelocity();
+  return {
+    tick: tick,
+    cx: cp.x * SCALE, cy: cp.y * SCALE,
+    cangle: car.chassisBody.GetAngle(),
+    cvx: cv.x, cvy: cv.y,
+    comega: car.chassisBody.GetAngularVelocity(),
+    w0x: car.wheels[0].body.GetPosition().x * SCALE,
+    w0y: car.wheels[0].body.GetPosition().y * SCALE,
+    w0a: car.wheels[0].body.GetAngle(),
+    w1x: car.wheels[1].body.GetPosition().x * SCALE,
+    w1y: car.wheels[1].body.GetPosition().y * SCALE,
+    w1a: car.wheels[1].body.GetAngle(),
+    hx:  car.person.head.body.GetPosition().x * SCALE,
+    hy:  car.person.head.body.GetPosition().y * SCALE,
+    tx:  car.person.torso.body.GetPosition().x * SCALE,
+    ty:  car.person.torso.body.GetPosition().y * SCALE,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Scenario runner
+// ---------------------------------------------------------------------------
+// Anti-flip throttle controller — emulates what a real player would do:
+// when the chassis tilts backward toward a wheelie flip, release throttle;
+// when it recovers, re-engage. Hysteresis on angle + angular-velocity guard
+// catches fast-tilting cases that haven't crossed the angle threshold yet.
+// Thresholds chosen so no scenario ever flips past 90° (verified by sweep).
+//   release when:  chassis_angle < ANGLE_PANIC  OR  chassis_omega < OMEGA_PANIC
+//   resume when:   chassis_angle > ANGLE_RESUME AND chassis_omega > -0.5
+var ANGLE_PANIC  = -0.4;   // rad, ~-23°
+var ANGLE_RESUME = -0.15;  // rad, ~-9°
+var OMEGA_PANIC  = -2.0;   // rad/s — catches "tilting back fast" before angle does
+
+function normalizeAngle(a) {
+  while (a >  Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+function runScenario(name, verts, spawnX, spawnY, settleTicks, throttleTicks) {
+  var world = new b2World(new Vec2(0, 10), true);
+  setupTerrain(world, verts);
+  var listener = new Box2D.Dynamics.b2ContactListener();
+  listener.BeginContact = function(c) {
+    var udA = c.GetFixtureA().GetBody().GetUserData();
+    var udB = c.GetFixtureB().GetBody().GetUserData();
+    var idA = udA && udA.id, idB = udB && udB.id;
+    if (idA === "wheel" && idB === "ground") udA.onGround = true;
+    if (idB === "wheel" && idA === "ground") udB.onGround = true;
+  };
+  listener.EndContact = function(c) {
+    var udA = c.GetFixtureA().GetBody().GetUserData();
+    var udB = c.GetFixtureB().GetBody().GetUserData();
+    var idA = udA && udA.id, idB = udB && udB.id;
+    if (idA === "wheel" && idB === "ground") udA.onGround = false;
+    if (idB === "wheel" && idA === "ground") udB.onGround = false;
+  };
+  world.SetContactListener(listener);
+
+  var fakePlayer = { shirtColorR: 128, shirtColorG: 128, shirtColorB: 128, dead: false };
+  var car = new Car(spawnX, spawnY, world, fakePlayer);
+
+  var trace = [record(car, 0)];
+  for (var i = 1; i <= settleTicks; i++) {
+    world.Step(1/30, 10, 10);
+    world.ClearForces();
+    trace.push(record(car, i));
+  }
+
+  // Throttle on; controller toggles based on chassis angle + angular velocity.
+  car.motorOn(true);
+  var throttleOn = true;
+  var motorReleases = 0;
+  for (var i = 1; i <= throttleTicks; i++) {
+    var a = normalizeAngle(car.chassisBody.GetAngle());
+    var omega = car.chassisBody.GetAngularVelocity();
+    if (throttleOn && (a < ANGLE_PANIC || omega < OMEGA_PANIC)) {
+      car.motorOff();
+      throttleOn = false;
+      motorReleases++;
+    } else if (!throttleOn && a > ANGLE_RESUME && omega > -0.5) {
+      car.motorOn(true);
+      throttleOn = true;
+    }
+    world.Step(1/30, 10, 10);
+    world.ClearForces();
+    var rec = record(car, settleTicks + i);
+    rec.throttle = throttleOn ? 1 : 0;
+    trace.push(rec);
+  }
+  return {
+    name: name,
+    terrain: verts,
+    spawn_x: spawnX, spawn_y: spawnY,
+    settle_ticks: settleTicks, throttle_ticks: throttleTicks,
+    angle_panic: ANGLE_PANIC, angle_resume: ANGLE_RESUME,
+    motor_releases: motorReleases,
+    trace: trace,
+  };
+}
+
+function run() {
+  var status = document.getElementById("status");
+  status.textContent = "Running scenario 1 of 3 (cruise_flat)...";
+
+  // Run synchronously; each takes ~100ms so total ~1s is fine.
+  var scenarios = [];
+
+  setTimeout(function() {
+    scenarios.push(runScenario("cruise_flat", terrainFlat(),  350, 500, 30, 240));
+    status.textContent = "Running scenario 2 of 3 (climb_ramp)...";
+    setTimeout(function() {
+      scenarios.push(runScenario("climb_ramp", terrainRamp(),  350, 500, 30, 240));
+      status.textContent = "Running scenario 3 of 3 (bump_coast)...";
+      setTimeout(function() {
+        scenarios.push(runScenario("bump_coast", terrainBump(), 350, 500, 30, 200));
+
+        var summary = scenarios.map(function(s) {
+          var last = s.trace[s.trace.length - 1];
+          return s.name + ": " + s.trace.length + " ticks  final cx=" + last.cx.toFixed(0) +
+                 "px  cy=" + last.cy.toFixed(0) + "px  motor_releases=" + s.motor_releases;
+        }).join("\n");
+        status.textContent = "All done. " + scenarios.length + " scenarios recorded.";
+        document.getElementById("output").textContent = summary;
+
+        var payload = { scenarios: scenarios };
+        var blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        var url = URL.createObjectURL(blob);
+        var dl = document.getElementById("download");
+        dl.href = url;
+        dl.download = "trace_js_multi.json";
+        dl.style.display = "inline-block";
+        dl.textContent = "Download trace_js_multi.json";
+      }, 50);
+    }, 50);
+  }, 50);
+}
+
+window.addEventListener("load", function() {
+  try { run(); }
+  catch (e) {
+    document.getElementById("status").textContent = "ERROR: " + e.message;
+    document.getElementById("output").textContent = e.stack;
+  }
+});
+</script>
+</body>
+</html>

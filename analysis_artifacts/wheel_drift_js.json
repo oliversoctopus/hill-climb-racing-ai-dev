@@ -1,0 +1,254 @@
+{
+  "test1": [
+    {
+      "label": "3-joint  rim_density=0.05 (JS Wheel.js exact)",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25
+      },
+      "result": {
+        "max_drift_m": 0.017413892813248122,
+        "drift_tick": 32,
+        "contact_tick": 24,
+        "final_drift_m": 0.006995893384026175
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.2",
+      "opts": {
+        "rimDensity": 0.2,
+        "freq": 70,
+        "damp": 25
+      },
+      "result": {
+        "max_drift_m": 0.003789270834134384,
+        "drift_tick": 30,
+        "contact_tick": 24,
+        "final_drift_m": 2.220446049250313e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.5",
+      "opts": {
+        "rimDensity": 0.5,
+        "freq": 70,
+        "damp": 25
+      },
+      "result": {
+        "max_drift_m": 0.0024960401192539727,
+        "drift_tick": 25,
+        "contact_tick": 24,
+        "final_drift_m": 2.220446049250313e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=1.0",
+      "opts": {
+        "rimDensity": 1,
+        "freq": 70,
+        "damp": 25
+      },
+      "result": {
+        "max_drift_m": 0.0016709220599733232,
+        "drift_tick": 27,
+        "contact_tick": 24,
+        "final_drift_m": 8.881784197001252e-16
+      }
+    }
+  ],
+  "test2": [
+    {
+      "label": "3-joint  rim_density=0.05 (JS Wheel.js exact)",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500
+      },
+      "result": {
+        "max_drift_m": 0.03800688879385794,
+        "drift_tick": 28,
+        "contact_tick": 24,
+        "final_drift_m": 0.008401782376833644
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.2",
+      "opts": {
+        "rimDensity": 0.2,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500
+      },
+      "result": {
+        "max_drift_m": 0.0035463863311195887,
+        "drift_tick": 49,
+        "contact_tick": 24,
+        "final_drift_m": 8.881784197001252e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.5",
+      "opts": {
+        "rimDensity": 0.5,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500
+      },
+      "result": {
+        "max_drift_m": 0.002416386245193136,
+        "drift_tick": 27,
+        "contact_tick": 24,
+        "final_drift_m": 6.661338147750939e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=1.0",
+      "opts": {
+        "rimDensity": 1,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500
+      },
+      "result": {
+        "max_drift_m": 0.0015859136889457837,
+        "drift_tick": 25,
+        "contact_tick": 24,
+        "final_drift_m": 4.440892098500626e-16
+      }
+    }
+  ],
+  "test3": [
+    {
+      "label": "3-joint  rim_density=0.05 (JS Wheel.js exact)",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "initialAngVel": 3
+      },
+      "result": {
+        "max_drift_m": 0.04418328400509819,
+        "drift_tick": 26,
+        "contact_tick": 86,
+        "final_drift_m": 0.001994908300626985
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.2",
+      "opts": {
+        "rimDensity": 0.2,
+        "freq": 70,
+        "damp": 25,
+        "initialAngVel": 3
+      },
+      "result": {
+        "max_drift_m": 0.0039006713294713613,
+        "drift_tick": 20,
+        "contact_tick": 80,
+        "final_drift_m": 5.551115123125783e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=0.5",
+      "opts": {
+        "rimDensity": 0.5,
+        "freq": 70,
+        "damp": 25,
+        "initialAngVel": 3
+      },
+      "result": {
+        "max_drift_m": 0.002811439606799304,
+        "drift_tick": 12,
+        "contact_tick": 68,
+        "final_drift_m": 2.220446049250313e-16
+      }
+    },
+    {
+      "label": "3-joint  rim_density=1.0",
+      "opts": {
+        "rimDensity": 1,
+        "freq": 70,
+        "damp": 25,
+        "initialAngVel": 3
+      },
+      "result": {
+        "max_drift_m": 0.0014537939735628225,
+        "drift_tick": 3,
+        "contact_tick": 94,
+        "final_drift_m": 8.881784197001252e-16
+      }
+    }
+  ],
+  "test4": [
+    {
+      "label": "vel=10  pos=10 ",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500,
+        "velIters": 10,
+        "posIters": 10
+      },
+      "result": {
+        "max_drift_m": 0.03800688879385794,
+        "drift_tick": 28,
+        "contact_tick": 24,
+        "final_drift_m": 0.008401782376833644
+      }
+    },
+    {
+      "label": "vel=20  pos=20 ",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500,
+        "velIters": 20,
+        "posIters": 20
+      },
+      "result": {
+        "max_drift_m": 0.006610203436468121,
+        "drift_tick": 26,
+        "contact_tick": 24,
+        "final_drift_m": 4.112774565356858e-10
+      }
+    },
+    {
+      "label": "vel=40  pos=40 ",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500,
+        "velIters": 40,
+        "posIters": 40
+      },
+      "result": {
+        "max_drift_m": 0.004538437298948983,
+        "drift_tick": 29,
+        "contact_tick": 24,
+        "final_drift_m": 6.006528607827022e-12
+      }
+    },
+    {
+      "label": "vel=80  pos=80 ",
+      "opts": {
+        "rimDensity": 0.05,
+        "freq": 70,
+        "damp": 25,
+        "angularKick": 500,
+        "velIters": 80,
+        "posIters": 80
+      },
+      "result": {
+        "max_drift_m": 0.00460506083219947,
+        "drift_tick": 30,
+        "contact_tick": 24,
+        "final_drift_m": 6.583200651277821e-11
+      }
+    }
+  ]
+}

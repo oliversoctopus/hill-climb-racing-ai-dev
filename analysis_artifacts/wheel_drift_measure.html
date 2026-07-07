@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wheel drift diagnostic — JS Box2D ground truth</title>
+<style>
+  body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #ddd; }
+  pre  { background: #000; color: #0f0; padding: 10px; max-height: 600px; overflow: auto; }
+  a.download { display: inline-block; padding: 10px 20px; background: #28a; color: white; text-decoration: none; border-radius: 4px; }
+  .meta { color: #ffa; }
+  h2 { margin-top: 24px; color: #fff; }
+</style>
+</head>
+<body>
+<h1>Wheel drift diagnostic — JS Box2D (ground truth)</h1>
+<p>Mirrors <code>python/diagnostics/wheel_drift_test.py</code> exactly: drop a chassis + wheel
+   onto flat ground using the original JS Wheel.js architecture (rim body + revolute + prismatic
+   + distance joint, <code>freq=70 damp=25</code>), measure how far the wheel drifts perpendicular
+   to its suspension axis (in chassis-local frame) over 300 ticks.</p>
+<p>Same numerical conditions as Python so the values are directly comparable:</p>
+<ul>
+  <li>chassis at world (0, 15), 4&nbsp;m × 1&nbsp;m, density 1</li>
+  <li>wheel anchored at chassis-local (1, 1), radius 0.5&nbsp;m</li>
+  <li>ground edge at y = 20</li>
+  <li>gravity (0, 10), step 1/30, 10 vel iters, 10 pos iters</li>
+  <li>300 ticks of simulation</li>
+</ul>
+<p class="meta" id="status">Loading...</p>
+<pre id="output"></pre>
+<a id="download" class="download" style="display:none">Download wheel_drift_js.json</a>
+
+<script src="../web/libraries/Box2d.js"></script>
+<script>
+// ---- Box2D shorthands (same names as the rest of the project) ----
+var Vec2 = Box2D.Common.Math.b2Vec2;
+var b2BodyDef = Box2D.Dynamics.b2BodyDef;
+var b2Body = Box2D.Dynamics.b2Body;
+var b2FixtureDef = Box2D.Dynamics.b2FixtureDef;
+var b2World = Box2D.Dynamics.b2World;
+var b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape;
+var b2CircleShape  = Box2D.Collision.Shapes.b2CircleShape;
+var b2EdgeShape    = Box2D.Collision.Shapes.b2EdgeShape;
+var b2StaticBody   = Box2D.Dynamics.b2Body.b2_staticBody;
+var b2DynamicBody  = Box2D.Dynamics.b2Body.b2_dynamicBody;
+var b2RevoluteJointDef  = Box2D.Dynamics.Joints.b2RevoluteJointDef;
+var b2PrismaticJointDef = Box2D.Dynamics.Joints.b2PrismaticJointDef;
+var b2DistanceJointDef  = Box2D.Dynamics.Joints.b2DistanceJointDef;
+var b2FilterData = Box2D.Dynamics.b2FilterData;
+
+// JS Box2D 2.0/2.1 has no b2EdgeShape; use a thin polygon for the ground.
+// (Box2D.js 2.0 represents ground as polygons typically.)
+
+var WHEEL_CAT   = 0x1;
+var CHASSIS_CAT = 0x2;
+var GROUND_CAT  = 0x4;
+
+var CHASSIS_X = 0.0,  CHASSIS_Y = 15.0;
+var WHEEL_X   = 1.0,  WHEEL_Y   = 16.0;
+var GROUND_Y  = 20.0;
+
+// ----------------------------------------------------------------
+function makeWorld() {
+  var world = new b2World(new Vec2(0, 10), false);
+
+  // Ground — flat horizontal surface at y=20.
+  var gd = new b2BodyDef();
+  gd.position = new Vec2(0, GROUND_Y + 0.5);  // body center; box extends ±0.5 around it
+  gd.type = b2StaticBody;
+  var ground = world.CreateBody(gd);
+  var gfix = new b2FixtureDef();
+  var gshape = new b2PolygonShape();
+  gshape.SetAsBox(100, 0.5);
+  gfix.shape = gshape;
+  gfix.friction = 0.99;
+  var gfilt = new b2FilterData();
+  gfilt.categoryBits = GROUND_CAT;
+  gfilt.maskBits = WHEEL_CAT | CHASSIS_CAT;
+  ground.CreateFixture(gfix).SetFilterData(gfilt);
+
+  return world;
+}
+
+function makeChassis(world) {
+  var bd = new b2BodyDef();
+  bd.type = b2DynamicBody;
+  bd.position = new Vec2(CHASSIS_X, CHASSIS_Y);
+  bd.linearDamping  = 0.05;
+  bd.angularDamping = 0.11;
+  var chassis = world.CreateBody(bd);
+  var fix = new b2FixtureDef();
+  var shape = new b2PolygonShape();
+  shape.SetAsBox(2.0, 0.5);
+  fix.shape = shape;
+  fix.density = 1.0;
+  fix.friction = 0.5;
+  fix.restitution = 0.01;
+  var filt = new b2FilterData();
+  filt.categoryBits = CHASSIS_CAT;
+  filt.maskBits = GROUND_CAT;
+  chassis.CreateFixture(fix).SetFilterData(filt);
+  return chassis;
+}
+
+// Build a JS-faithful 3-joint wheel (mirrors Wheel.js but standalone).
+// Returns { rolling, rim }.
+function build3jointRig(world, chassis, rimDensity, freq, damp) {
+  // Rolling body (this is what touches the ground)
+  var rbd = new b2BodyDef();
+  rbd.type = b2DynamicBody;
+  rbd.position = new Vec2(WHEEL_X, WHEEL_Y);
+  var rolling = world.CreateBody(rbd);
+  var rfix = new b2FixtureDef();
+  rfix.shape = new b2CircleShape(0.5);
+  rfix.density = 1.0;
+  rfix.friction = 1.0;
+  rfix.restitution = 0.1;
+  var rfilt = new b2FilterData();
+  rfilt.categoryBits = WHEEL_CAT;
+  rfilt.maskBits = GROUND_CAT;
+  rolling.CreateFixture(rfix).SetFilterData(rfilt);
+  rolling.SetAngularDamping(1.8);
+
+  // Rim body (filtered out of all collisions via groupIndex=-1, like Wheel.js)
+  var bd2 = new b2BodyDef();
+  bd2.type = b2DynamicBody;
+  bd2.position = new Vec2(WHEEL_X, WHEEL_Y);
+  var rim = world.CreateBody(bd2);
+  var fix2 = new b2FixtureDef();
+  fix2.shape = new b2CircleShape(0.5);
+  fix2.density = rimDensity;
+  fix2.friction = 0.99;
+  fix2.restitution = 0.2;
+  var filt2 = new b2FilterData();
+  filt2.groupIndex = -1;
+  rim.CreateFixture(fix2).SetFilterData(filt2);
+
+  // Revolute: rolling ↔ rim (free spin)
+  var rev = new b2RevoluteJointDef();
+  rev.Initialize(rolling, rim, rolling.GetPosition());
+  world.CreateJoint(rev);
+
+  // Prismatic: rim ↔ chassis along (0, -1) — the hard axis constraint
+  var pris = new b2PrismaticJointDef();
+  pris.Initialize(rim, chassis, rolling.GetPosition(), new Vec2(0, -1));
+  world.CreateJoint(pris);
+
+  // Distance joint: rim ↔ chassis, anchors 3r apart
+  var dist = new b2DistanceJointDef();
+  var anchorWheel = new Vec2(WHEEL_X, WHEEL_Y);
+  var anchorCar   = new Vec2(WHEEL_X, WHEEL_Y - 1.5);
+  dist.Initialize(rim, chassis, anchorWheel, anchorCar);
+  dist.frequencyHz = freq;
+  dist.dampingRatio = damp;
+  world.CreateJoint(dist);
+
+  return { rolling: rolling, rim: rim };
+}
+
+// ----------------------------------------------------------------
+// Compute "wheel chassis-local x". Mirrors Box2D's GetLocalPoint().
+function chassisLocalPoint(chassis, worldPoint) {
+  var cp = chassis.GetPosition();
+  var a = chassis.GetAngle();
+  var dx = worldPoint.x - cp.x;
+  var dy = worldPoint.y - cp.y;
+  var c = Math.cos(a), s = Math.sin(a);
+  // Inverse rotation = transpose for 2D rotation matrix
+  return { x:  c * dx + s * dy, y: -s * dx + c * dy };
+}
+
+function runDropTest(opts) {
+  opts = opts || {};
+  var rimDensity = opts.rimDensity != null ? opts.rimDensity : 0.05;
+  var freq       = opts.freq       != null ? opts.freq       : 70.0;
+  var damp       = opts.damp       != null ? opts.damp       : 25.0;
+  var ticks      = opts.ticks      || 300;
+  var velIters   = opts.velIters   || 10;
+  var posIters   = opts.posIters   || 10;
+  var angularKick   = opts.angularKick   || 0.0;
+  var initialAngVel = opts.initialAngVel || 0.0;
+
+  var world = makeWorld();
+  var chassis = makeChassis(world);
+  var rig = build3jointRig(world, chassis, rimDensity, freq, damp);
+  var wheel = rig.rolling;
+
+  if (initialAngVel) chassis.SetAngularVelocity(initialAngVel);
+
+  var maxDrift = 0, driftTick = -1, contactTick = -1, kicked = false;
+  var finalDrift = 0;
+
+  for (var t = 0; t < ticks; t++) {
+    world.Step(1.0 / 30.0, velIters, posIters);
+    world.ClearForces();
+
+    // Did the wheel touch the ground?
+    var inContact = false;
+    var cl = wheel.GetContactList();
+    while (cl) { if (cl.contact && cl.contact.IsTouching()) { inContact = true; break; } cl = cl.next; }
+    if (inContact && contactTick < 0) contactTick = t;
+    if (inContact && !kicked && angularKick !== 0.0 && contactTick === t) {
+      chassis.ApplyTorque(angularKick);
+      kicked = true;
+    }
+
+    var lp = chassisLocalPoint(chassis, wheel.GetPosition());
+    var dx = Math.abs(lp.x - WHEEL_X);
+    finalDrift = dx;
+    if (dx > maxDrift) { maxDrift = dx; driftTick = t; }
+  }
+  return { max_drift_m: maxDrift, drift_tick: driftTick, contact_tick: contactTick, final_drift_m: finalDrift };
+}
+
+function fmt(r) {
+  function mm(x) { return (x * 1000).toFixed(1).padStart(6, ' ') + 'mm'; }
+  return 'max=' + mm(r.max_drift_m) +
+         '  @tick=' + String(r.drift_tick).padStart(3, ' ') +
+         '  contact@=' + String(r.contact_tick).padStart(3, ' ') +
+         '  final=' + mm(r.final_drift_m);
+}
+
+// ----------------------------------------------------------------
+function run() {
+  var lines = [];
+  function log(s) { lines.push(s); }
+
+  log('JS Box2D 2.0/2.1 ground truth — wheel drift across 3-joint configs');
+  log('=' .repeat(80));
+  log('chassis at (' + CHASSIS_X + ', ' + CHASSIS_Y + '), wheel at (' + WHEEL_X + ', ' + WHEEL_Y + '), ground at y=' + GROUND_Y);
+  log('wheel chassis-local x should be ' + WHEEL_X + ' forever; any deviation = drift');
+  log('');
+
+  var configs = [
+    ['3-joint  rim_density=0.05 (JS Wheel.js exact)', {rimDensity: 0.05, freq: 70, damp: 25}],
+    ['3-joint  rim_density=0.2',                       {rimDensity: 0.2,  freq: 70, damp: 25}],
+    ['3-joint  rim_density=0.5',                       {rimDensity: 0.5,  freq: 70, damp: 25}],
+    ['3-joint  rim_density=1.0',                       {rimDensity: 1.0,  freq: 70, damp: 25}],
+  ];
+
+  // Test 1: simple drop
+  log('[Test 1] simple drop (gravity only, no rotation, no motor)');
+  log('-'.repeat(80));
+  var results = { test1: [], test2: [], test3: [], test4: [] };
+  for (var i = 0; i < configs.length; i++) {
+    var label = configs[i][0], opts = configs[i][1];
+    var r = runDropTest(opts);
+    log('  ' + label.padEnd(48, ' ') + '  ' + fmt(r));
+    results.test1.push({ label: label, opts: opts, result: r });
+  }
+
+  // Test 2: drop + torque kick
+  log('');
+  log('[Test 2] drop + 500 N·m torque kick on landing');
+  log('-'.repeat(80));
+  for (var i = 0; i < configs.length; i++) {
+    var label = configs[i][0], opts = configs[i][1];
+    var o = Object.assign({}, opts, { angularKick: 500 });
+    var r = runDropTest(o);
+    log('  ' + label.padEnd(48, ' ') + '  ' + fmt(r));
+    results.test2.push({ label: label, opts: o, result: r });
+  }
+
+  // Test 3: chassis already spinning
+  log('');
+  log('[Test 3] drop with chassis spinning at 3 rad/s');
+  log('-'.repeat(80));
+  for (var i = 0; i < configs.length; i++) {
+    var label = configs[i][0], opts = configs[i][1];
+    var o = Object.assign({}, opts, { initialAngVel: 3.0 });
+    var r = runDropTest(o);
+    log('  ' + label.padEnd(48, ' ') + '  ' + fmt(r));
+    results.test3.push({ label: label, opts: o, result: r });
+  }
+
+  // Test 4: solver iteration sweep on the JS-faithful 3-joint
+  log('');
+  log('[Test 4] solver iteration sweep on JS-faithful 3-joint (test 2 conditions)');
+  log('-'.repeat(80));
+  var iterCombos = [[10,10],[20,20],[40,40],[80,80]];
+  for (var i = 0; i < iterCombos.length; i++) {
+    var vi = iterCombos[i][0], pi = iterCombos[i][1];
+    var o = { rimDensity: 0.05, freq: 70, damp: 25, angularKick: 500, velIters: vi, posIters: pi };
+    var r = runDropTest(o);
+    var label = 'vel=' + String(vi).padEnd(3, ' ') + ' pos=' + String(pi).padEnd(3, ' ');
+    log('  ' + label.padEnd(48, ' ') + '  ' + fmt(r));
+    results.test4.push({ label: label, opts: o, result: r });
+  }
+
+  document.getElementById('output').textContent = lines.join('\n');
+  document.getElementById('status').textContent = 'Done. Compare to python\\diagnostics\\wheel_drift_test.py output.';
+
+  // Make JSON downloadable.
+  var blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+  var a = document.getElementById('download');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wheel_drift_js.json';
+  a.style.display = 'inline-block';
+  a.textContent = 'Download wheel_drift_js.json';
+}
+
+window.addEventListener('load', function () {
+  try { run(); }
+  catch (e) {
+    document.getElementById('status').textContent = 'ERROR: ' + e.message;
+    document.getElementById('output').textContent = (e.stack || String(e));
+    throw e;
+  }
+});
+</script>
+
+</body>
+</html>

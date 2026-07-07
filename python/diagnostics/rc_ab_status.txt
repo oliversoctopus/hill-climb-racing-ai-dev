@@ -1,0 +1,10 @@
+RC A/B run started Thu Jun  4 23:57:23 CDT 2026
+>>> [23:57:23] START rc_a
+<<< [01:04:05] END   rc_a exit=0
+>>> [01:04:05] START base_a
+<<< [02:16:51] END   base_a exit=0
+>>> [02:16:51] START rc_b
+<<< [03:29:30] END   rc_b exit=0
+>>> [03:29:30] START base_b
+<<< [04:39:23] END   base_b exit=0
+ALL DONE Fri Jun  5 04:39:23 CDT 2026

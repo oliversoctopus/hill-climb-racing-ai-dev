@@ -1,0 +1,24 @@
+﻿python\.venv\Scripts\python.exe : WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+At line:1 char:1
++ python\.venv\Scripts\python.exe python\diagnostics\_sweep_evals.py -- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: All lo...itten to STDERR:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+I0000 00:00:1779654576.818957   37684 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1779654578.688125   37684 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+C:\Users\olive\Projects\Hill-Climb-Racing-AI\python\.venv\Lib\site-packages\py_mini_racer\py_mini_racer.py:13: UserWarning: pkg_resources is 
+deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 
+2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+Checkpoint                                                   mean     std   median     max
+------------------------------------------------------------------------------------------
+ppo_js_8m_exp1_perwheel_5000000                            1160.8     459     1229    1927  (139s)
+ppo_js_8m_exp1_perwheel_5500000                            1224.3     438     1337    1928  (142s)
+ppo_js_8m_exp1_perwheel_6000000                            1235.7     386     1313    1910  (142s)
+ppo_js_8m_exp1_perwheel_6400000                            1182.3     416     1302    1913  (135s)
+ppo_js_8m_exp1_perwheel_6800000                            1099.0     439     1218    1905  (121s)
+ppo_js_8m_exp1_perwheel_7200000                            1159.7     397     1243    1904  (130s)

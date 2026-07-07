@@ -1,0 +1,24 @@
+﻿python\.venv\Scripts\python.exe : WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+At line:1 char:1
++ python\.venv\Scripts\python.exe python\diagnostics\_sweep_evals.py -- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (WARNING: All lo...itten to STDERR:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+I0000 00:00:1779660339.970407   37528 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1779660341.526846   37528 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to 
+floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+C:\Users\olive\Projects\Hill-Climb-Racing-AI\python\.venv\Lib\site-packages\py_mini_racer\py_mini_racer.py:13: UserWarning: pkg_resources is 
+deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 
+2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+Checkpoint                                                   mean     std   median     max
+------------------------------------------------------------------------------------------
+ppo_js_8m_combo_5500000                                    1086.4     443     1165    1873  (120s)
+ppo_js_8m_combo_6000000                                    1155.8     460     1233    1928  (115s)
+ppo_js_8m_combo_6100000                                    1188.5     385     1253    1847  (118s)
+ppo_js_8m_combo_6400000                                    1126.6     436     1190    1931  (118s)
+ppo_js_8m_combo_6800000                                    1248.3     387     1297    1928  (128s)
+ppo_js_8m_combo_7200000                                    1163.3     420     1282    1911  (119s)

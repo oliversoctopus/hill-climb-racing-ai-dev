@@ -1,0 +1,31 @@
+# =============================================================================
+# Root repo .gitignore  (LOCAL-ONLY repo — tracks python/ + docs, no remote)
+# =============================================================================
+
+# --- web/ is its own git repo (pushes to GitHub -> Vercel). Ignore it entirely
+#     so this root repo never tries to record it as a gitlink/submodule. ---
+/web/
+
+# --- Python virtualenv & bytecode caches ---
+python/.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Training outputs: regrow fast (~81 checkpoints/run) and are large ---
+python/checkpoints/
+python/tb/
+python/logs/
+
+# --- IDE ---
+.idea/
+
+# --- Committed experiment/probe result artifacts (large, regenerable) ---
+*.npz
+*.evallog
+*.log
+*.csv
+python/diagnostics/p5_sweep_logs/
+python/autorun/backtrack_runs/
+
+# Note: analysis_artifacts/ is intentionally KEPT (tracked) despite its size.

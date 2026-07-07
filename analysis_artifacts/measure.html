@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>HCR Physics Trace (JS reference)</title>
+<style>
+  body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #ddd; }
+  pre { background: #000; color: #0f0; padding: 10px; max-height: 400px; overflow: auto; }
+  a.download { display: inline-block; padding: 10px 20px; background: #28a; color: white; text-decoration: none; border-radius: 4px; }
+  .meta { color: #ffa; }
+</style>
+</head>
+<body>
+<h1>Hill Climb Racing physics trace (JS reference)</h1>
+<p>Loads the original JS classes (Box2d.js 2.0/2.1) and runs the same scenario the Python <code>measure.py</code> runs:
+  flat ground at y=600, car spawns at (350, 500), 30 ticks settle, then 120 ticks of full-forward throttle.</p>
+<p class="meta" id="status">Loading...</p>
+<pre id="output"></pre>
+<a id="download" class="download" style="display:none">Download trace_js.json</a>
+
+<script src="../web/libraries/Box2d.js"></script>
+<script>
+// ---- p5.js helper polyfills (Car/Wheel/Person.js use these) ----
+function createVector(x, y) { return { x: x, y: y }; }
+function color() { return null; }
+var canvas = { width: 1280, height: 720 };
+var PI = Math.PI;     // Car.js: motorSpeed * PI
+var TWO_PI = 2 * Math.PI;
+function abs(x)   { return Math.abs(x); }
+function floor(x) { return Math.floor(x); }
+function min(a,b) { return Math.min(a,b); }
+function max(a,b) { return Math.max(a,b); }
+function map(v,a,b,c,d) { return c + (d-c) * ((v-a)/(b-a)); }
+function constrain(v,lo,hi) { return Math.min(hi, Math.max(lo, v)); }
+
+// Globals referenced inside Car.show()/update() — defined so script doesn't crash, never used in physics path.
+var panX = 0, panY = 0, nextPanX = 0;
+var humanPlaying = true;          // disables Car.update()'s "no progress → dead" path
+var fightMode = false;
+var humanPlayer = null;
+var reset = false;
+var SCALE = 30;
+
+// ---- Box2D imports (same as sketch.js) ----
+var Vec2 = Box2D.Common.Math.b2Vec2;
+var b2BodyDef = Box2D.Dynamics.b2BodyDef;
+var b2Body = Box2D.Dynamics.b2Body;
+var b2FixtureDef = Box2D.Dynamics.b2FixtureDef;
+var b2World = Box2D.Dynamics.b2World;
+var b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape;
+var b2CircleShape = Box2D.Collision.Shapes.b2CircleShape;
+var b2StaticBody = Box2D.Dynamics.b2Body.b2_staticBody;
+var b2DynamicBody = Box2D.Dynamics.b2Body.b2_dynamicBody;
+var b2RevoluteJointDef = Box2D.Dynamics.Joints.b2RevoluteJointDef;
+var b2PrismaticJointDef = Box2D.Dynamics.Joints.b2PrismaticJointDef;
+var b2FilterData = Box2D.Dynamics.b2FilterData;
+var b2DistanceJointDef = Box2D.Dynamics.Joints.b2DistanceJointDef;
+
+// ---- Collision categories (same as sketch.js) ----
+var WHEEL_CATEGORY  = 0x0001;
+var CHASSIS_CATEGORY= 0x0002;
+var GRASS_CATEGORY  = 0x0004;
+var DIRT_CATEGORY   = 0x0008;
+var PERSON_CATEGORY = 0x0010;
+var WHEEL_MASK   = GRASS_CATEGORY;
+var CHASSIS_MASK = DIRT_CATEGORY;
+var GRASS_MASK   = WHEEL_CATEGORY | PERSON_CATEGORY;
+var DIRT_MASK    = CHASSIS_CATEGORY;
+var PERSON_MASK  = GRASS_CATEGORY;
+</script>
+
+<!-- Load the actual game physics classes, unmodified -->
+<script src="../web/Wheel.js"></script>
+<script src="../web/Person.js"></script>
+<script src="../web/Car.js"></script>
+
+<script>
+// Hilly terrain vertices in pixel space. First 500px is flat (so the car can
+// settle on a known reference height); after that, multi-frequency hills that
+// exercise suspension, grip on slopes, and chassis tilt under both directions.
+function makeTerrainVerts() {
+  var verts = [];
+  for (var i = 0; i <= 30; i++) {
+    var x = i * 100;
+    var y;
+    if (x < 500) {
+      y = 600;
+    } else {
+      // multi-frequency wave — 3 sinusoids, deterministic
+      var dx = x - 500;
+      y = 600 - 25 * Math.sin(dx * 0.003) - 12 * Math.sin(dx * 0.011) + 8 * Math.sin(dx * 0.022);
+    }
+    verts.push([x, y]);
+  }
+  return verts;
+}
+
+function setupTerrain(world, verts) {
+  // Mirrors Ground.js setBodies: one dirt body, one grass body 5px above.
+  var bd = new b2BodyDef();
+  bd.type = b2StaticBody;
+  var body = world.CreateBody(bd);
+  body.SetUserData({ id: "ground" });
+
+  function addEdgeSegment(yOffset, mask, cat) {
+    for (var i = 1; i < verts.length; i++) {
+      var fd = new b2FixtureDef();
+      fd.friction = 0.99;
+      fd.restitution = 0.1;
+      fd.shape = new b2PolygonShape();
+      fd.shape.SetAsEdge(
+        new Vec2(verts[i - 1][0] / SCALE, (verts[i - 1][1] + yOffset) / SCALE),
+        new Vec2(verts[i][0] / SCALE,     (verts[i][1] + yOffset) / SCALE)
+      );
+      var ft = new b2FilterData();
+      ft.categoryBits = cat;
+      ft.maskBits = mask;
+      body.CreateFixture(fd).SetFilterData(ft);
+    }
+  }
+  addEdgeSegment(0,  DIRT_MASK,  DIRT_CATEGORY);
+  addEdgeSegment(-5, GRASS_MASK, GRASS_CATEGORY);
+  return body;
+}
+
+function record(car, tick) {
+  var cp = car.chassisBody.GetPosition();
+  var cv = car.chassisBody.GetLinearVelocity();
+  return {
+    tick: tick,
+    cx: cp.x * SCALE, cy: cp.y * SCALE,
+    cangle: car.chassisBody.GetAngle(),
+    cvx: cv.x, cvy: cv.y,
+    comega: car.chassisBody.GetAngularVelocity(),
+    w0x: car.wheels[0].body.GetPosition().x * SCALE,
+    w0y: car.wheels[0].body.GetPosition().y * SCALE,
+    w0a: car.wheels[0].body.GetAngle(),
+    w1x: car.wheels[1].body.GetPosition().x * SCALE,
+    w1y: car.wheels[1].body.GetPosition().y * SCALE,
+    w1a: car.wheels[1].body.GetAngle(),
+    hx:  car.person.head.body.GetPosition().x * SCALE,
+    hy:  car.person.head.body.GetPosition().y * SCALE,
+    tx:  car.person.torso.body.GetPosition().x * SCALE,
+    ty:  car.person.torso.body.GetPosition().y * SCALE,
+  };
+}
+
+function run() {
+  var status = document.getElementById("status");
+  status.textContent = "Building world...";
+
+  var world = new b2World(new Vec2(0, 10), true);
+  var terrainVerts = makeTerrainVerts();
+  setupTerrain(world, terrainVerts);
+
+  // Listener: only track wheel.onGround. No head-death (we're on flat ground forward — head won't hit).
+  var listener = new Box2D.Dynamics.b2ContactListener();
+  listener.BeginContact = function(c) {
+    var udA = c.GetFixtureA().GetBody().GetUserData();
+    var udB = c.GetFixtureB().GetBody().GetUserData();
+    var idA = udA && udA.id, idB = udB && udB.id;
+    if (idA === "wheel" && idB === "ground") udA.onGround = true;
+    if (idB === "wheel" && idA === "ground") udB.onGround = true;
+  };
+  listener.EndContact = function(c) {
+    var udA = c.GetFixtureA().GetBody().GetUserData();
+    var udB = c.GetFixtureB().GetBody().GetUserData();
+    var idA = udA && udA.id, idB = udB && udB.id;
+    if (idA === "wheel" && idB === "ground") udA.onGround = false;
+    if (idB === "wheel" && idA === "ground") udB.onGround = false;
+  };
+  world.SetContactListener(listener);
+
+  // Car expects this.player.shirtColor* in its constructor (used for color()) — give a dummy player.
+  var fakePlayer = { shirtColorR: 128, shirtColorG: 128, shirtColorB: 128, dead: false };
+  var car = new Car(350, 500, world, fakePlayer);
+
+  var SETTLE_TICKS  = 30;     // 1 second of settling
+  var THROTTLE_TICKS= 120;    // 4 seconds of full throttle
+  var trace = [];
+
+  trace.push(record(car, 0));
+
+  for (var i = 1; i <= SETTLE_TICKS; i++) {
+    world.Step(1/30, 10, 10);
+    world.ClearForces();
+    trace.push(record(car, i));
+  }
+
+  car.motorOn(true);          // forward
+  for (var i = 1; i <= THROTTLE_TICKS; i++) {
+    world.Step(1/30, 10, 10);
+    world.ClearForces();
+    trace.push(record(car, SETTLE_TICKS + i));
+  }
+
+  status.textContent = "Done. " + trace.length + " ticks recorded.";
+  document.getElementById("output").textContent = JSON.stringify(trace.slice(0, 6), null, 2) + "\n...";
+
+  // Bundle trace + the terrain vertices so the Python side uses identical geometry.
+  var payload = { terrain: terrainVerts, trace: trace };
+  var blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var dl = document.getElementById("download");
+  dl.href = url;
+  dl.download = "trace_js.json";
+  dl.style.display = "inline-block";
+  dl.textContent = "Download trace_js.json";
+}
+
+window.addEventListener("load", function() {
+  try { run(); }
+  catch (e) {
+    document.getElementById("status").textContent = "ERROR: " + e.message;
+    document.getElementById("output").textContent = e.stack;
+  }
+});
+</script>
+</body>
+</html>

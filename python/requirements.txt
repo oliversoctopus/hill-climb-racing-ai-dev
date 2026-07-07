@@ -1,0 +1,7 @@
+Box2D==2.3.10
+pygame>=2.5
+numpy>=1.26
+gymnasium>=0.29
+stable-baselines3>=2.3
+tensorboard>=2.16
+tensorflow-cpu>=2.16   # optional — only to unlock TensorBoard's full feature set
