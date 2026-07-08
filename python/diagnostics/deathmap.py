@@ -15,7 +15,7 @@ sys.path.insert(0, ROOT)
 from stable_baselines3 import PPO  # noqa
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack  # noqa
 from env import HillClimbEnv  # noqa
-from constants import GROUND_DISTANCE, SPAWN_X  # noqa
+from constants import GROUND_DISTANCE, SPAWN_X, COMPLETE_PX  # noqa
 
 def main():
     ckpt = sys.argv[1]
@@ -26,8 +26,6 @@ def main():
     env = VecFrameStack(DummyVecEnv([lambda: HillClimbEnv(
         max_episode_steps=max_steps, seed=seed, randomize_terrain=True, per_wheel_obs=True)]), 4)
 
-    end_px = GROUND_DISTANCE - 350.0          # last reachable vertex region
-    complete_thresh = end_px - 600.0          # within ~600px of the end = "completed"
     scores, deaths_px, steps_arr, truncated = [], [], [], []
     for _ in range(n):
         obs = env.reset(); done = False; info = {}; st = 0
@@ -42,14 +40,14 @@ def main():
 
     scores = np.array(scores); deaths_px = np.array(deaths_px)
     steps_arr = np.array(steps_arr); truncated = np.array(truncated)
-    completed = deaths_px >= complete_thresh
+    completed = deaths_px >= COMPLETE_PX      # reached the last vertex (true end)
     early = scores < 100
     # steepness ramp at the stopping point: map(x, 0, DIST, 130, 250)
     steep_at = 130.0 + (250.0 - 130.0) * np.clip(deaths_px / GROUND_DISTANCE, 0, 1)
 
-    print(f"[deathmap] {os.path.basename(ckpt)}  n={n} seed={seed}  track={GROUND_DISTANCE}px (max score ~{int((end_px-SPAWN_X)/10)})")
+    print(f"[deathmap] {os.path.basename(ckpt)}  n={n} seed={seed}  track={GROUND_DISTANCE}px (completion score ~{int((COMPLETE_PX-SPAWN_X)/10)})")
     print(f"  mean score={scores.mean():.1f}  median={int(np.median(scores))}  max={int(scores.max())}")
-    print(f"  COMPLETED track (within 600px of end): {100*completed.mean():.1f}%")
+    print(f"  COMPLETED track (reached last vertex):  {100*completed.mean():.1f}%")
     print(f"  early death (<100):                    {100*early.mean():.1f}%")
     print(f"  timed out (hit {max_steps} steps, survived): {100*truncated.mean():.1f}%")
     print(f"  of NON-completions: mean stop at {deaths_px[~completed].mean():.0f}px "

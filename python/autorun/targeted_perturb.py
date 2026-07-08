@@ -32,8 +32,7 @@ from ground import make_ground                                     # noqa: E402
 from constants import GROUND_DISTANCE, SPAWN_X                      # noqa: E402
 
 DEFAULT_CKPT = os.path.join(ROOT, "checkpoints", "seed2_resume_11611776_steps.zip")
-END_PX = GROUND_DISTANCE - 350.0
-COMPLETE_PX = END_PX - 600.0
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 
 # Perturbation menu: (forced_action, pre_px before the wall, width_ticks).
 # action 0=forward(gas), 1=reverse(brake/back), 2=off(coast).

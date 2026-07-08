@@ -12,21 +12,25 @@ log); for what the score numbers mean, the **Score landmarks & ceilings** glossa
 The docs use several distances/scores that are easy to conflate — the canonical key
 (CONVENTIONS.md #12). Score = `(max_dist_px − SPAWN_X)/10`, uncapped; `GROUND_DISTANCE`=19200px.
 
-**End-of-track distance landmarks:**
+**Completion** = reaching the **last solid terrain vertex** (the launch lip / true end).
+Single-sourced as `COMPLETE_PX = GROUND_DISTANCE − GROUND_SMOOTHNESS` in `constants.py`
+(and `storedGround.distance − smoothness` in the browser). Every completion check uses it.
 
 | landmark | px | ≈ score | meaning |
 |---|---|---|---|
-| `COMPLETE_PX` | 18,250 (`GROUND_DISTANCE − 950`) | **1790** | "completion" as best_of_k / eval / jitter_probe count it — a soft line ~935 px short of the true end |
-| `END_PX` | 18,850 (`GROUND_DISTANCE − 350`) | **1850** | the old "~1850 cap" |
-| launch lip | ~19,185 | **1883** | last solid vertex |
-| real fly-off | — | **~1900–1962** | beating the game = reach the lip and fly off into the void (measured) |
+| **`COMPLETE_PX`** (completion) | **19,185** (`GROUND_DISTANCE − GROUND_SMOOTHNESS`) | **~1883** | **the true end — reaching the last solid vertex (the launch lip).** This is "completion." |
+| real fly-off | — | **~1900–1962** | beating the game = reach the lip and fly off into the void (a bit past completion; measured) |
+| ~~soft line~~ (RETIRED) | 18,250 (`−950`) | ~~1790~~ | the OLD "completion" (best_of_k/eval/jitter_probe) — ~935 px short; **wrong**, fixed 2026-07-07 |
+| ~~`END_PX`~~ (RETIRED) | 18,850 (`−350`) | ~~1850~~ | the old "~1850 cap" — also short of the true end |
 
 **Mean-score ceilings** (different eval protocols — NOT interchangeable): **~1350** =
 base_a on the 200-ep seed-42 protocol; **~1410** = on the 120 pinned-track set (the gap is
 protocol, not a better model).
 
-**Best-of-X completion ceilings** (per MODEL): **70%** = base_a (the old "70% plateau, flat
-to K=16"); **82.5%** = the deployed seed2_resume model (K=30, still gaining past K=10).
+**Best-of-X completion ceilings** (per MODEL): **70%** = base_a; **82.5%** = the deployed
+seed2_resume model (K=30). ⚠️ These were measured against the **OLD** soft line (score
+1790); under the corrected last-vertex definition (~1883) they will be **lower** and need
+re-measuring — do NOT compare old %s to numbers produced after 2026-07-07.
 
 ---
 

@@ -27,7 +27,7 @@ from ground import make_ground                                     # noqa: E402
 from constants import GROUND_DISTANCE, SPAWN_X                      # noqa: E402
 
 DEFAULT_A = os.path.join(ROOT, "checkpoints", "seed2_resume_11611776_steps.zip")
-COMPLETE_PX = GROUND_DISTANCE - 950.0
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 
 
 def run_episode(venv, model):

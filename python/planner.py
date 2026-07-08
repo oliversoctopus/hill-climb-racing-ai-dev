@@ -39,8 +39,7 @@ from ground import make_ground                                     # noqa: E402
 from constants import GROUND_DISTANCE, SPAWN_X, SCALE              # noqa: E402
 
 DEFAULT_CKPT = os.path.join(HERE, "checkpoints", "seed2_resume_11611776_steps.zip")
-END_PX = GROUND_DISTANCE - 350.0
-COMPLETE_PX = END_PX - 600.0
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 ENGAGE_FROM = 0.45 * GROUND_DISTANCE      # only plan in the steep back of the track
 
 

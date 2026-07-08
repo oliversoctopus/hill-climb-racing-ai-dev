@@ -47,8 +47,7 @@ sys.path.insert(0, HERE)
 
 from constants import GROUND_DISTANCE, SPAWN_X  # noqa: E402
 
-END_PX = GROUND_DISTANCE - 350.0
-COMPLETE_PX = END_PX - 600.0
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 
 _W: dict = {}  # per-worker state (model, cfg) — populated by _init_worker
 

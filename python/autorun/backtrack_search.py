@@ -41,8 +41,7 @@ from constants import (GROUND_DISTANCE, SPAWN_X, SCALE,             # noqa: E402
                        CHASSIS_WIDTH, CHASSIS_HEIGHT)
 
 DEFAULT_CKPT = os.path.join(ROOT, "checkpoints", "seed2_resume_11611776_steps.zip")
-END_PX = GROUND_DISTANCE - 350.0
-COMPLETE_PX = END_PX - 600.0          # soft "completion" line used in the rest of the repo (score 1790)
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 # "Beating the game" = max_x reaches the END of the solid terrain (last vertex
 # ~19185px = score 1883) and launches off the lip into the void. We target the lip;
 # reaching it requires the fly-off, and the arc beyond pushes the real score to

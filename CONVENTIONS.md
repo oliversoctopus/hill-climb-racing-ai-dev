@@ -87,15 +87,16 @@ these. Referenced from CLAUDE.md.
   behind an explicit flag (boolean / env var), default off.
 
 ### 12. Domain landmark constants (score / ceiling numbers)
-- **Docs**: maintain one "Score landmarks & ceilings" glossary that pins each
-  number to its meaning / model / metric — the distance landmarks (`COMPLETE_PX`
-  → score 1790, `END_PX` → 1850, launch lip → 1883, real fly-off ~1900–1962) and
-  the empirical ceilings (mean ~1350 base_a / ~1410 pinned-track; Best-of-X
-  completion 70% base_a / 82.5% deployed). Never use them interchangeably.
-- **Code** (deferred to Tier 5): the distance landmarks are re-derived with magic
-  offsets (`GROUND_DISTANCE − 350` / `− 950`) in ~6 autorun/diagnostics files.
-  Define them ONCE (named constants + derivations) and import — folded into the
-  Tier 5 autorun/diagnostics cleanup, not Tier 3.
+- **Completion = reaching the last solid vertex** (the launch lip / true end):
+  `COMPLETE_PX = GROUND_DISTANCE − GROUND_SMOOTHNESS` (19,185px, score ~1883),
+  **single-sourced in `constants.py`** and imported everywhere (browser uses
+  `distance − smoothness`). Fixed 2026-07-07: the old soft lines `−950`→1790 and
+  `−350`→1850 under-counted the track and are retired. **Pre-fix completion %s are NOT
+  comparable** to post-fix ones (the new line is stricter).
+- **Docs**: one "Score landmarks & ceilings" glossary (PROJECT_STATUS.md, linked from
+  CLAUDE.md) pins each number to meaning/model/metric — completion ~1883, fly-off
+  ~1900–1962, mean ceilings ~1350 base_a / ~1410 pinned, Best-of-X completion (per model,
+  measured against the OLD line). Never use them interchangeably.
 
 ---
 

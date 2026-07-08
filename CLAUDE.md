@@ -78,15 +78,16 @@ python\.venv\Scripts\python.exe python\tests\test_saverestore.py         # save/
   `+0.01/tick` survival and `-50` on death.
 - **Score** (the eval metric) = `(max_dist_px − spawn_x)/10`, **uncapped**.
   (Canonical landmark/ceiling glossary: PROJECT_STATUS.md "Score landmarks & ceilings".)
-  Three end-of-track landmarks (often conflated — see memory
-  `true-score-ceiling-flyoff`): `COMPLETE_PX` soft line = **1790** (what
-  best_of_k / jitter_probe / eval call "completion", ~935px short of the end);
-  `END_PX` = **1850** (the old "~1850 cap"); the **last solid vertex ≈ 19,185px
-  = score 1883** (the launch lip). **Beating the game = reach the lip and fly off
-  into the void** (you die when chassis `y*30 > 720`); the projectile arc adds
-  ~30–80px, so a real completion scores **~1900–1962** (measured;
-  `diagnostics/measure_track_end.py`). The env never declares victory — episodes
-  end only on death/truncation. `GROUND_DISTANCE=19200px`, `SCALE=30px/m`.
+  **Completion = reaching the last solid vertex** (the launch lip): single-sourced as
+  `COMPLETE_PX = GROUND_DISTANCE − GROUND_SMOOTHNESS` = **19,185px = score ~1883** in
+  `constants.py` (browser: `distance − smoothness`); every completion check uses it
+  (fixed 2026-07-07 — older code used soft lines `−950`→1790 / `−350`→1850 that
+  under-counted; completion %s from before that are NOT comparable). **Beating the game =
+  reach the lip and fly off into the void** (you die when chassis `y*30 > 720`); the
+  projectile arc adds ~30–80px, so a real fly-off scores **~1900–1962** (measured;
+  `diagnostics/measure_track_end.py`). The env never declares victory — episodes end only
+  on death/truncation. `GROUND_DISTANCE=19200px`, `GROUND_SMOOTHNESS=15px`, `SCALE=30px/m`.
+  (See also memory `true-score-ceiling-flyoff`.)
 - Rearward samples exist but are off (`obs_spec.REAR_N=0`; tested, no benefit).
   The browser reads rear_n + all obs constants from `web/policy_meta.json` now —
   there's no hand-synced `PPO_REAR_N` in `ai_policy.js` anymore (Tier 1, CONVENTIONS.md #4).

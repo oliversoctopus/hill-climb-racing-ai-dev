@@ -35,8 +35,7 @@ from multilife_env import MultiLifeEnv  # noqa: E402
 from ground import make_ground  # noqa: E402
 from constants import GROUND_DISTANCE, SPAWN_X  # noqa: E402
 
-END_PX = GROUND_DISTANCE - 350.0
-COMPLETE_PX = END_PX - 600.0
+from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 CHAMP = os.path.join(ROOT, "checkpoints", "base_a_8000000_steps.zip")
 
 

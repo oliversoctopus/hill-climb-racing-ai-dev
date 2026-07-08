@@ -29,6 +29,14 @@ GROUND_GRASS_THICKNESS = 5           # px; grass edges offset upward by this/SCA
 GROUND_DISTANCE = 15 * CANVAS_WIDTH  # 19200 px
 GROUND_DIFFICULTY = 50
 
+# "Completion" = reaching the last SOLID terrain vertex (the launch lip) — the true
+# end of the track (score ~1883). Single source for every completion check.
+# NOTE: earlier code used softer lines (GROUND_DISTANCE-950 → score 1790, or -350 →
+# 1850) that UNDER-counted the track; those are retired (fixed 2026-07-07). Completion
+# %s measured against the old lines are NOT comparable to this (stricter) definition.
+LAST_VERTEX_PX = GROUND_DISTANCE - GROUND_SMOOTHNESS   # 19185 px
+COMPLETE_PX = LAST_VERTEX_PX
+
 # ---- Spawn (sketch.js Player.addToWorld: new Car(350, spawningY, ...)) ----
 SPAWN_X = 350
 SPAWN_Y_BACK_FROM_GROUND = 100       # spawningY = vectors[10].y - 100 (set at gen time)
