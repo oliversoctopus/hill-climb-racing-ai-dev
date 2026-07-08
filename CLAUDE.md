@@ -15,7 +15,8 @@ Python (Stable-Baselines3) and deploys to the browser via ONNX.
 both training and deployment. We did this because `pybox2d 2.3.10`'s solver
 allowed 30–100 mm of wheel drift the original `Box2d.js` (Box2D 2.0/2.1) doesn't;
 running the real JS physics gives exact browser parity (and lifted the score
-ceiling 836 → ~1300). **Do not restore pybox2d** (`legacy_pybox2d/`).
+ceiling 836 → ~1300). **Do not restore pybox2d** — the archived port
+(`legacy_pybox2d/`) was deleted 2026-07-07; git history has it if ever needed.
 
 ## Architecture / data flow
 
@@ -325,5 +326,6 @@ python/
   checkpoints/, tb/, logs/   # logs/ = training run stdout logs (nudge_a*, robust1px_a, _crash, ...)
   archive/        # retired trainers (reverse curriculum, SAC) — NEVER delete
                   #   unless the user explicitly says so (see archive/README.md)
-  legacy_pybox2d/     # archived pre-JS-physics code — do NOT reactivate
 ```
+(The `legacy_pybox2d/` pre-JS-physics port was deleted 2026-07-07 — it was the sole
+remaining consumer of pybox2d and the dead physics-tuning constants. In git history.)

@@ -289,33 +289,6 @@ class Ground:
                 f,
             )
 
-    # ------------------------------------------------------------------
-    # Vision helper (Ground.js getPositions)
-    # ------------------------------------------------------------------
-    def get_positions(self, x_m: float, n: int, skip: int) -> List[float]:
-        """Return *n* y-values (in pixel space) at and after world-x *x_m* (meters).
-
-        LEGACY: only ``legacy_pybox2d/diagnostics/compat_envs.py`` still calls this.
-        The live JS-backed path samples the ground in js_backend (in meters); see
-        that module's getPositions. Kept so the legacy diagnostics still import.
-        """
-        x_px = x_m * SCALE
-        out: List[float] = []
-        for i, (vx, vy) in enumerate(self.vectors):
-            if vx >= x_px:
-                j = 0
-                limit = min(skip * n, len(self.vectors) - i)
-                while j < limit:
-                    out.append(self.vectors[i + j][1])
-                    j += skip
-                break
-        if not out:
-            fallback = self.vectors[-1][1] if self.vectors else 0.0
-            out.append(fallback)
-        while len(out) < n:
-            out.append(out[-1])
-        return out
-
 
 def _map(x: float, a: float, b: float, c: float, d: float) -> float:
     if b == a:

@@ -278,10 +278,10 @@ Hill-Climb-Racing-AI/
     │                          # jitter_probe.py (chaos / pinned-track probe),
     │                          # test_vectorized_ground.py (bitwise parity),
     │                          # p5_sweep_results.json + old run logs
-    ├── archive/               # retired trainers (reverse-curriculum train.py, SAC)
-    │                          # + their launch scripts (see archive/README.md).
-    │                          # NEVER delete unless the user explicitly says so.
-    └── legacy_pybox2d/        # archived pre-JS-physics code — do NOT reactivate
+    └── archive/               # retired trainers (reverse-curriculum train.py, SAC)
+                               # + their launch scripts (see archive/README.md).
+                               # NEVER delete unless the user explicitly says so.
+    (legacy_pybox2d/ pre-JS-physics port deleted 2026-07-07 — see git history)
 ```
 
 ## Model selection & eval protocol (adopted 2026-06-06)
@@ -676,7 +676,8 @@ and to escape spots where it gets stuck. Built as default-off, parity-safe infra
 
 - ❌ `dynamo=True` in torch.onnx.export (won't load in ORT Web 1.18).
 - ❌ Threaded WASM ORT (needs CORS headers we don't set).
-- ❌ Restore pybox2d (`legacy_pybox2d/`) — the drift returns.
+- ❌ Restore pybox2d — the drift returns. (The archived `legacy_pybox2d/` port was
+  deleted 2026-07-07; git history has it.)
 - ❌ Add throttle scaling to `Car.js` — the original motor is on/off only and
   fidelity is intentional (this is why SAC's continuous action was wasted).
 - ❌ Prune checkpoints (or other artifacts) without the user's explicit

@@ -64,8 +64,9 @@ these. Referenced from CLAUDE.md.
 ### 8. Dead / experimental code
 - **Truly dead** (never executed on any live path): **delete** — git history
   (root is versioned as of Tier 0) preserves it.
-- **Retired whole approaches**: move to `archive/` or `legacy_*/` (never delete
-  `archive/` or `legacy_pybox2d/`).
+- **Retired whole approaches**: move to `archive/` (never delete `archive/` without
+  an explicit go-ahead). (`legacy_pybox2d/` was such an archive, deleted 2026-07-07
+  once it was the only consumer of pybox2d + the dead physics constants.)
 - **Still-wired experiments that default OFF** (e.g. nudge, spawn-jitter): keep in
   place behind a clear `# EXPERIMENTAL (off by default)` banner + the enabling flag.
 - When an experiment's scaffolding is **entangled with a live function** and can't
