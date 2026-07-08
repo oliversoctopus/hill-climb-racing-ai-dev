@@ -287,8 +287,8 @@ below are project-specific traps.
   (early-stop + X=15); cross-track adaptive allocation analyzed
   (`adaptive_bestofx.py`). The ~17% hard core is shared across policies (a
   structural on/off-motor limit). Physics off-limits. Reusable infra:
-  `python/autorun/` (best_of_k, adaptive_bestofx, targeted_perturb, ensemble,
-  robust_ab), `archive/planner.py` (retired MPC), `diagnostics/jitter_probe.py`, `tests/test_saverestore.py`.
+  `python/autorun/` (best_of_k, adaptive_bestofx, robust_ab), `archive/planner.py`
+  (retired MPC), `diagnostics/jitter_probe.py`, `tests/test_saverestore.py`.
 
 ## Repo map (essentials)
 

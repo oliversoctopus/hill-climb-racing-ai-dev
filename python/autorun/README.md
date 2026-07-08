@@ -20,10 +20,8 @@ it and inline the idiom — kept as-is to preserve their exact recorded behavior
 
 ## Best-of-X / deployment levers
 - **best_of_k.py** — Best-of-K completion/score curve for the deployed champion (±1px spawn jitter, pinned tracks); saves the attempt matrix.
-- **best_of_k_stoch.py** — can stochastic action sampling beat the deterministic Best-of-K ceiling?
 - **adaptive_bestofx.py** — adaptive Best-of-X allocation scored OFFLINE on best_of_k's recorded attempt matrix (uniform vs stop-on-solve vs adaptive vs oracle).
-- **targeted_perturb.py** — targeted-perturbation Best-of-X (off-policy burst at the wall) vs blind ±1px jitter, paired.
-- **ensemble_bestofx.py** — do two differently-trained policies' Best-of-X failures complement (mixed union > single)?
+  <br>*(Pruned 2026-07-07 — tested-negative Best-of-X variants: `best_of_k_stoch` (stochastic sampling capped lower), `targeted_perturb` (wash vs blind jitter), `ensemble_bestofx` (no help). Conclusions in PROJECT_STATUS; scripts in git history.)*
 
 ## Search / replay
 - **backtrack_search.py** — Go-Explore "save-scum" backtracking search on the frozen policy: rewind + perturb + stitch to factorize per-section survival.
@@ -45,14 +43,13 @@ it and inline the idiom — kept as-is to preserve their exact recorded behavior
 - **eval_curve.py** — deterministic eval curve across a run's checkpoints on PINNED tracks (low-noise, comparable across checkpoints).
 - **_curve_table.py** — print train-reward vs det-eval table + Pearson r for seed2 / fs8.
 - **plot_curves.py** — overlay det eval vs train reward for seed2 + fs8 (two panels, twin y-axes).
-- **plot_curve_base16.py** — train reward vs det eval for the 16M run base16_a (did 8M→16M buy any eval?).
-- **combined_plot.py** — combined figure for the compute-vs-decay + resume study (saturation curve + eval trajectories).
+  <br>*(Pruned 2026-07-07 — one-off study figures whose conclusions are in PROJECT_STATUS: `plot_curve_base16` (8M→16M), `combined_plot` (compute-vs-decay). In git history.)*
 
 ## Weight averaging
 - **swa.py** — Stochastic Weight Averaging of late `seed2_resume` checkpoints → basin centroid.
 
 ## Redundant / overlapping clusters
-Groups that do similar things (flagged for later pruning — NOT a deletion recommendation):
-- **Best-of-X variants (5):** `best_of_k`, `best_of_k_stoch`, `adaptive_bestofx`, `targeted_perturb`, `ensemble_bestofx` — all build a pinned-track attempt matrix and compute Best-of-K completion; they differ only in what diversifies attempts.
-- **Paired-A/B family (4):** `paired_ab` (the generalized one), `robust_ab`, `fs8_ab`, `eval_multi` — same pinned-track inject + paired-diff scaffold; `fs8_ab`/`robust_ab` are specializations of `paired_ab`, `eval_multi` extends it to N checkpoints.
-- **Plotting (4):** `plot_curves`, `plot_curve_base16`, `combined_plot`, `_curve_table` — all read `eval_curve_*.npz` + train logs/TB and render the eval-vs-train story (`_curve_table` is the text-only version of `plot_curves`).
+Groups that do similar things (the tested-negative / one-off members were pruned
+2026-07-07 — see the section notes above; these remain):
+- **Paired-A/B family (4):** `paired_ab` (the generalized one), `robust_ab`, `fs8_ab`, `eval_multi` — same pinned-track inject + paired-diff scaffold; `fs8_ab`/`robust_ab` are specializations of `paired_ab`, `eval_multi` extends it to N checkpoints. (Kept — still occasionally useful.)
+- **Plotting (2):** `plot_curves` + its text-only twin `_curve_table` — read `eval_curve_*.npz` + train logs/TB and render the eval-vs-train story.

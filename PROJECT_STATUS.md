@@ -586,7 +586,7 @@ reaches the SAME eval ceiling as the shorter champion (base16 16M ≈ champion 8
 and snapshot peaks (base16's 1526@14.4M is a single noisy 40-track point) must
 not be snapshot-picked — only the f=0 paired A/B decides cross-run. Plots:
 `train_vs_eval_curves.png`, `train_vs_eval_base16.png`; infra: `eval_curve.py`,
-`plot_curves.py`, `plot_curve_base16.py` in `python/autorun/`.
+`plot_curves.py` in `python/autorun/` (the one-off `plot_curve_base16.py` was pruned 2026-07-07).
 
 ### Compute vs decay (2026-06-15) — ~8M is a saturation knee, ceiling is robust
 Tested whether the eval ceiling is set by the decay schedule completing or by raw
@@ -606,7 +606,7 @@ compute. All eval on the SAME 120 pinned tracks (paired vs champion):
   direction (less compute undershoots, more saturates, const-low resume can't
   push past) — a policy-class × chaos ceiling, not a schedule artifact. Champion
   8M is the right compute. Figure: `compute_vs_decay.png`; infra:
-  `autorun/paired_ab.py`, `combined_plot.py`.
+  `autorun/paired_ab.py` (the one-off `combined_plot.py` was pruned 2026-07-07).
 
 ### Deploying a snapshot-pick: seed2_resume 11.6M (2026-06-15)
 The seed2 hold-low resume's eval CURVE had a 40-track spike at 11.6M (1582).
