@@ -98,10 +98,26 @@ these. Referenced from CLAUDE.md.
   ~1900–1962, mean ceilings ~1350 base_a / ~1410 pinned, Best-of-X completion (per model,
   measured against the OLD line). Never use them interchangeably.
 
+### 3. Sign / coordinate helpers (decided Tier 4 = A)
+- World space is **y-DOWN** (larger y = lower on screen), which makes
+  clearance/altitude sign errors easy to introduce. The sign conventions live in
+  **named helpers** in one place (`web/game/geom.js`): `altitudeAbove(groundY, pointY)`
+  (positive = above ground) and `isBelowKillLine(yPx)` (fell off the world). Touched
+  code uses these instead of bare subtractions.
+
+### 10. JS naming style (decided Tier 4 = A)
+- **Codify the existing style; don't churn.** The web JS uses `var`, camelCase
+  functions, `_prefix` for internal helpers, `SCREAMING_CASE` constants — keep it.
+  Bring TOUCHED code to that style; do **not** migrate `var`→`let/const` or add arrow
+  functions as part of a structural change. A `let/const`/arrow modernization pass may
+  happen later as its own isolated commit (so any regression is unambiguously cosmetic,
+  not structural). Note: the physics classes + the p5/Box2D compat-shim block in
+  `web/index.html` MUST stay classic `var`/`function` (their top-level `var`s become the
+  `window` globals the physics classes read; the classes are also loaded into V8 for
+  training, which has no modules / no `window`).
+
 ---
 
 ## Deferred (decide when we reach the relevant tier — Claude will re-surface these)
 
-- **#3** sign/coordinate helper conventions (y-down, clearance/altitude) — Tier 4
-- **#10** JS naming style (touched code only) — Tier 4
 - **#13** `.gitattributes` line-ending normalization — anytime (orthogonal)
