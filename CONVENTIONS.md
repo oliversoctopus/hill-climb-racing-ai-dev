@@ -109,9 +109,11 @@ these. Referenced from CLAUDE.md.
 - **Codify the existing style; don't churn.** The web JS uses `var`, camelCase
   functions, `_prefix` for internal helpers, `SCREAMING_CASE` constants — keep it.
   Bring TOUCHED code to that style; do **not** migrate `var`→`let/const` or add arrow
-  functions as part of a structural change. A `let/const`/arrow modernization pass may
-  happen later as its own isolated commit (so any regression is unambiguously cosmetic,
-  not structural). Note: the physics classes + the p5/Box2D compat-shim block in
+  functions as part of a structural change. **Done 2026-07-07:** `web/game/` was
+  modernized in its own isolated commit (AST-based `lebab`: `var`→`const`/`let`, arrow
+  callbacks where `this`-safe, template literals) AFTER the Tier 4 split shipped — so any
+  regression would have been unambiguously cosmetic, not structural. Note: the physics
+  classes + the p5/Box2D compat-shim block in
   `web/index.html` MUST stay classic `var`/`function` (their top-level `var`s become the
   `window` globals the physics classes read; the classes are also loaded into V8 for
   training, which has no modules / no `window`).
