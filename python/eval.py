@@ -64,9 +64,17 @@ def _load_model(model_path: str):
     return PPO.load(model_path), False
 
 
-def _build_env(*, randomize_terrain, seed, max_steps, render_mode, recurrent=False):
-    """Wrap a HillClimbEnv to match training-time obs: VecFrameStack(4) for
-    plain PPO, single-frame for RecurrentPPO (the LSTM replaces the stack)."""
+def _build_env(*, randomize_terrain, seed, max_steps, render_mode, recurrent=False, n_stack=None):
+    """Wrap a HillClimbEnv to match training-time obs: VecFrameStack for plain PPO,
+    single-frame for RecurrentPPO (the LSTM replaces the stack). Returns
+    (vec_env, env_single) — env_single is the unwrapped HillClimbEnv (what the
+    autorun scripts reach for as `venv.venv.envs[0].unwrapped`).
+
+    Canonical env builder: the autorun/diagnostics eval scripts import this instead
+    of re-implementing the VecFrameStack(DummyVecEnv([...])) idiom. `n_stack=None`
+    reads HCR_N_STACK / obs_spec.N_STACK (the champion's 4); pass an explicit int to
+    force a depth (e.g. the frame-stack-8 A/B). per_wheel obs is on by default (env
+    default), so callers don't set HCR_PER_WHEEL."""
     from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
     env_single = HillClimbEnv(
         max_episode_steps=max_steps,
@@ -78,7 +86,8 @@ def _build_env(*, randomize_terrain, seed, max_steps, render_mode, recurrent=Fal
     if not recurrent:
         # Match training's frame-stack depth. HCR_N_STACK overrides the champion's
         # 4 (a model trained with HCR_N_STACK=8 must be evaluated with 8). #5.
-        n_stack = int(os.environ.get("HCR_N_STACK", str(obs_spec.N_STACK)))
+        if n_stack is None:
+            n_stack = int(os.environ.get("HCR_N_STACK", str(obs_spec.N_STACK)))
         env = VecFrameStack(env, n_stack=n_stack)
     return env, env_single
 

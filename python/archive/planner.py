@@ -28,7 +28,8 @@ import numpy as np
 
 os.environ["HCR_PER_WHEEL"] = "1"
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+ROOT = os.path.dirname(HERE)   # python/ — this file was moved to python/archive/ (retired MPC, 2026-07-07)
+sys.path.insert(0, ROOT)
 from stable_baselines3 import PPO                                   # noqa: E402
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack  # noqa: E402
 import env as E                                                     # noqa: E402
@@ -38,7 +39,7 @@ from js_backend import JSPhysics                                    # noqa: E402
 from ground import make_ground                                     # noqa: E402
 from constants import GROUND_DISTANCE, SPAWN_X, SCALE              # noqa: E402
 
-DEFAULT_CKPT = os.path.join(HERE, "checkpoints", "seed2_resume_11611776_steps.zip")
+DEFAULT_CKPT = os.path.join(ROOT, "checkpoints", "seed2_resume_11611776_steps.zip")
 from constants import COMPLETE_PX  # completion = last vertex (score ~1883); single source
 ENGAGE_FROM = 0.45 * GROUND_DISTANCE      # only plan in the steep back of the track
 
@@ -193,7 +194,7 @@ def main():
           f"{int((pp&~pc).sum())}, both={int((pc&pp).sum())}, neither={int((~pc&~pp).sum())}")
     print(f"  mean planner sim-steps/attempt = {steps.mean():.0f} "
           f"(~{1+steps.mean()/2000:.1f} blind Best-of-X tries cost the same)")
-    out = os.path.join(HERE, "autorun", "planner_results.npz")
+    out = os.path.join(ROOT, "autorun", "planner_results.npz")
     np.savez(out, pol=pol, mpc=mpc, overrides=ov, sim_steps=steps, complete_px=COMPLETE_PX)
     print(f"  raw -> {out}")
 
