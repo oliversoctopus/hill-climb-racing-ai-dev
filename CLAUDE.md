@@ -294,12 +294,17 @@ below are project-specific traps.
 
 ```
 web/                                         # the deployable static site (its own git
-  index.html                                 #   repo → Vercel). index.html = the old
-  ai_policy.js, ai_policy.onnx               #   ai_play.html (PPO in V8; incl. a Bug-
-  Car/Wheel/Person/Ground.js, Pics/          #   probe debug panel, see HOW_TO_PLAY §7).
-  libraries/{Box2d,ort.min}.js + *.wasm      #   *** SINGLE SOURCE of the physics JS ***
-  vercel.json, README.md, HOW_TO_PLAY.md     #   (Box2d/Car/Wheel/Person/Ground) — the
-                                             #   training path reads these too. + ORT runtime + deploy docs.
+  index.html                                 #   repo → Vercel). index.html = a thin shell:
+  game/                                      #   markup + p5/Box2d compat shim + physics
+    state,bridge,geom,modes,sim,             #   <script>s + a window.HCR bridge + one
+    render,cheats,search,input,main.js       #   <script type=module src=game/main.js>.
+  ai_policy.js, ai_policy.onnx               #   game/ = the app as ES modules (Tier 4 split
+  Car/Wheel/Person/Ground.js, Pics/          #   2026-07-07; incl. a Bug-probe panel, see
+  libraries/{Box2d,ort.min}.js + *.wasm      #   HOW_TO_PLAY §7). *** SINGLE SOURCE of the
+  vercel.json, README.md, HOW_TO_PLAY.md     #   physics JS (Box2d/Car/Wheel/Person/Ground) —
+                                             #   the training path reads these too; they MUST
+                                             #   stay classic (V8 has no modules/window), so
+                                             #   game/ reaches them via the window.HCR bridge. ***
 HOW_TO_PLAY.md                               # serve + play/race-the-AI instructions (+ Bug-probe panel)
 cb_reference/                                # pristine Code Bullet originals (for diffing; NOT loaded)
 legacy_neat/                                 # legacy NEAT-era game (kept, unused by AI):
