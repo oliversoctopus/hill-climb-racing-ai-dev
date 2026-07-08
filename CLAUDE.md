@@ -77,6 +77,7 @@ python\.venv\Scripts\python.exe python\tests\test_saverestore.py         # save/
 - **Reward:** forward progress `max(0, Δx_m)` + shaping (default on):
   `+0.01/tick` survival and `-50` on death.
 - **Score** (the eval metric) = `(max_dist_px − spawn_x)/10`, **uncapped**.
+  (Canonical landmark/ceiling glossary: PROJECT_STATUS.md "Score landmarks & ceilings".)
   Three end-of-track landmarks (often conflated — see memory
   `true-score-ceiling-flyoff`): `COMPLETE_PX` soft line = **1790** (what
   best_of_k / jitter_probe / eval call "completion", ~935px short of the end);
@@ -86,8 +87,9 @@ python\.venv\Scripts\python.exe python\tests\test_saverestore.py         # save/
   ~30–80px, so a real completion scores **~1900–1962** (measured;
   `diagnostics/measure_track_end.py`). The env never declares victory — episodes
   end only on death/truncation. `GROUND_DISTANCE=19200px`, `SCALE=30px/m`.
-- Rearward samples exist but are off (`env.py GROUND_REAR_N=0`; tested, no
-  benefit); `ai_policy.js PPO_REAR_N` must match the deployed model.
+- Rearward samples exist but are off (`obs_spec.REAR_N=0`; tested, no benefit).
+  The browser reads rear_n + all obs constants from `web/policy_meta.json` now —
+  there's no hand-synced `PPO_REAR_N` in `ai_policy.js` anymore (Tier 1, CONVENTIONS.md #4).
 
 ## Terrain / difficulty knob
 
@@ -149,9 +151,12 @@ below are project-specific traps.
    produces (200-ep seed-42 parity confirm unchanged; see PROJECT_STATUS).
 5. **ONNX export:** `export_onnx.py` uses `dynamo=False`, opset 11 — required for
    ONNX Runtime Web 1.18. Don't use the dynamo exporter or threaded WASM.
-6. **`web/ai_policy.js`** constants `PPO_PER_WHEEL` / `PPO_REAR_N` /
-   `PPO_LOOKAHEAD_N` must match the deployed `web/ai_policy.onnx` (currently
-   per-wheel, rear=0, lookahead=6 → 48 stacked).
+6. **Obs encoding is single-sourced** in `python/obs_spec.py` → `export_onnx.py`
+   emits `web/policy_meta.json` → `web/ai_policy.js` loads + validates it fail-closed
+   (Tier 1, CONVENTIONS.md #4). So `ai_policy.js` no longer hardcodes `PPO_*` constants,
+   and re-exporting a model refreshes its meta automatically. `python/tests/test_obs_parity.py`
+   enforces that `ai_policy.js._buildObs` matches `env.py._build_obs`. (Deployed model
+   currently: per-wheel, rear=0, lookahead=6 → 48 stacked.)
 7. **Reboot before long sessions** — known machine-level memory leak, ~100 MB/h
    (unfixable, do NOT investigate); long runs can hit `WinError 1450`.
 8. **Checkpoints regrow fast** (~81 per run). Keep only `_final` + any cited
@@ -177,7 +182,7 @@ below are project-specific traps.
    the same step (don't wait for a separate "push"). Applies only to this project.
    (Only `web/` is a git repo → Vercel; the root is untracked.)
 
-## Current state (2026-06-06)
+## Current state (updated 2026-07-07)
 
 - **Save-scum backtracking BEATS THE GAME on 30/30 tracks (2026-06-18)** — the one
   test-time lever that broke the chaos ceiling. Go-Explore-style: on death, restore

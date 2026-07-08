@@ -1,6 +1,34 @@
 # Hill Climb Racing AI — handoff document
 
-Detailed handoff + experiment log. For day-to-day orientation see `CLAUDE.md`.
+Detailed handoff + experiment log. For day-to-day orientation see `CLAUDE.md`;
+for coding conventions see `CONVENTIONS.md`.
+
+**How to read this file:** everything below the glossary is a *reverse-chronological
+experiment log* (newest first). For a plain-English overview jump to **TL;DR** (below the
+log); for what the score numbers mean, the **Score landmarks & ceilings** glossary is next.
+
+## Score landmarks & ceilings (glossary)
+
+The docs use several distances/scores that are easy to conflate — the canonical key
+(CONVENTIONS.md #12). Score = `(max_dist_px − SPAWN_X)/10`, uncapped; `GROUND_DISTANCE`=19200px.
+
+**End-of-track distance landmarks:**
+
+| landmark | px | ≈ score | meaning |
+|---|---|---|---|
+| `COMPLETE_PX` | 18,250 (`GROUND_DISTANCE − 950`) | **1790** | "completion" as best_of_k / eval / jitter_probe count it — a soft line ~935 px short of the true end |
+| `END_PX` | 18,850 (`GROUND_DISTANCE − 350`) | **1850** | the old "~1850 cap" |
+| launch lip | ~19,185 | **1883** | last solid vertex |
+| real fly-off | — | **~1900–1962** | beating the game = reach the lip and fly off into the void (measured) |
+
+**Mean-score ceilings** (different eval protocols — NOT interchangeable): **~1350** =
+base_a on the 200-ep seed-42 protocol; **~1410** = on the 120 pinned-track set (the gap is
+protocol, not a better model).
+
+**Best-of-X completion ceilings** (per MODEL): **70%** = base_a (the old "70% plateau, flat
+to K=16"); **82.5%** = the deployed seed2_resume model (K=30, still gaining past K=10).
+
+---
 
 ## 2026-07-07 — Driver ragdoll joint limits (browser-play fix, AI wash)
 
@@ -241,23 +269,19 @@ Browser:
 ## Repo layout
 
 ```
-Hill-Climb-Racing-AI/
-├── web/                       # the deployable static site (its own git repo → Vercel)
-│   ├── index.html             #   browser AI (modes: AI / Human / vs); = old ai_play.html
-│   ├── ai_policy.js / ai_policy.onnx    #   obs construction + deployed model
-│   ├── Wheel/Person/Car/Ground.js, Pics/   #   physics + sprites (copies)
-│   ├── libraries/             #   Box2d.js + ort.min.js + ort-wasm[-simd].wasm
-│   ├── vercel.json            #   static deploy config (wasm Content-Type)
-│   └── README.md, HOW_TO_PLAY.md
-├── HOW_TO_PLAY.md             # serve + play instructions (behavior reference)
-├── index.html, sketch.js, *Genome/Neat...  # original NEAT-era game (kept, unused by AI)
-├── Wheel.js / Person.js / Car.js / Ground.js  # unmodified JS game classes (root copy
-│                              #   is what js_backend.py + the legacy game load)
-├── cb_reference/              # originals re-downloaded from thebigcb.com (for diffing)
-├── libraries/                 # Box2d.js (source-of-truth physics) + p5.js
-│                              #   (browser ORT runtime lives in web/libraries/ now)
-├── Pics/                      # sprites (legacy game; web/ has its own copy)
-├── wheel_drift_measure.html   # JS drift ground-truth (1-4mm); legacy measure*.html/trace*.json
+Hill-Climb-Racing-AI/          # (canonical map: CLAUDE.md "Repo map (essentials)")
+├── web/                       # deployable static site (own git repo → Vercel);
+│                              #   *** SINGLE SOURCE of the physics JS *** — js_backend.py
+│                              #   reads web/{Car,Wheel,Person,Ground}.js directly (no root copy)
+│   ├── index.html, ai_policy.js, ai_policy.onnx, policy_meta.json
+│   ├── Car/Wheel/Person/Ground.js, Pics/, libraries/{Box2d,ort.min}.js + *.wasm
+│   └── vercel.json, README.md, HOW_TO_PLAY.md
+├── CLAUDE.md / PROJECT_STATUS.md / CONVENTIONS.md / README.md / HOW_TO_PLAY.md
+├── cb_reference/              # pristine Code Bullet originals (for diffing; not loaded)
+├── legacy_neat/               # NEAT-era JS game; loads physics from ../web/, p5 from ../libraries/
+├── libraries/                 # p5.{js,dom,sound}.js ONLY (for legacy_neat)
+├── analysis_artifacts/        # one-off diagnostic outputs (measure*.html, trace*.json, …)
+├── Pics/                      # sprites for the legacy game (web/ has its own copy)
 └── python/
     ├── .venv/                 # Python 3.13 + SB3, gymnasium, py_mini_racer, onnx(runtime), pygame, tb
     ├── constants.py           # SCALE, sizes, spawn, GROUND_* (physics params live in JS)

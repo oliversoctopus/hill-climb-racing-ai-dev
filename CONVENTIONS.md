@@ -86,11 +86,21 @@ these. Referenced from CLAUDE.md.
 - **No stray `console.log` / `print`** in shipped code paths. Gate any debug output
   behind an explicit flag (boolean / env var), default off.
 
+### 12. Domain landmark constants (score / ceiling numbers)
+- **Docs**: maintain one "Score landmarks & ceilings" glossary that pins each
+  number to its meaning / model / metric — the distance landmarks (`COMPLETE_PX`
+  → score 1790, `END_PX` → 1850, launch lip → 1883, real fly-off ~1900–1962) and
+  the empirical ceilings (mean ~1350 base_a / ~1410 pinned-track; Best-of-X
+  completion 70% base_a / 82.5% deployed). Never use them interchangeably.
+- **Code** (deferred to Tier 5): the distance landmarks are re-derived with magic
+  offsets (`GROUND_DISTANCE − 350` / `− 950`) in ~6 autorun/diagnostics files.
+  Define them ONCE (named constants + derivations) and import — folded into the
+  Tier 5 autorun/diagnostics cleanup, not Tier 3.
+
 ---
 
 ## Deferred (decide when we reach the relevant tier — Claude will re-surface these)
 
-- **#3** sign/coordinate helper conventions (y-down, clearance/altitude)
-- **#10** JS naming style (touched code only)
-- **#12** domain landmark constants (the conflated score numbers)
-- **#13** `.gitattributes` line-ending normalization
+- **#3** sign/coordinate helper conventions (y-down, clearance/altitude) — Tier 4
+- **#10** JS naming style (touched code only) — Tier 4
+- **#13** `.gitattributes` line-ending normalization — anytime (orthogonal)
