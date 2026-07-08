@@ -19,7 +19,7 @@ state() returns:
     angle          : chassis angle (rad)
     ang_vel        : chassis angular velocity (rad/s)
     on_ground_now  : bool (any wheel touching ground this tick)
-    ground_samples : list of 6 ground y-positions (pixels) ahead of chassis
+    ground_samples : list of ground y-positions (METERS) ahead of chassis
     dead           : bool (head-ground contact or fell off canvas)
     max_x          : meters, monotonically increasing — used for score
 """
@@ -173,13 +173,13 @@ function _buildGroundBodies(world, vertices_px) {
     for (var i = 0; i < this.vectors.length; i++) {
       if (this.vectors[i].x >= x_m) {
         for (var j = 0; j < Math.min(skip * n, this.vectors.length - i); j += skip) {
-          out.push(this.vectors[i + j].y * SCALE);  // return in pixel space
+          out.push(this.vectors[i + j].y);  // meters (CONVENTIONS.md #1; matches Ground.js)
         }
         break;
       }
     }
     if (out.length === 0) {
-      out.push(this.vectors.length > 0 ? this.vectors[this.vectors.length-1].y * SCALE : 0);
+      out.push(this.vectors.length > 0 ? this.vectors[this.vectors.length-1].y : 0);
     }
     while (out.length < n) out.push(out[out.length - 1]);
     return out;
@@ -198,7 +198,7 @@ function _buildGroundBodies(world, vertices_px) {
     for (var k = 1; k <= n; k++) {
       var j = idx - k * skip;
       if (j < 0) j = 0;
-      out.push(this.vectors[j].y * SCALE);  // pixel space, matches getPositions
+      out.push(this.vectors[j].y);  // meters, matches getPositions
     }
     return out;
   };

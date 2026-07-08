@@ -14,6 +14,7 @@ With no output path, exports straight to the browser deployment location
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -29,6 +30,32 @@ REPO_ROOT = os.path.abspath(os.path.join(HERE, ".."))
 DEPLOY_ONNX = os.path.join(REPO_ROOT, "web", "ai_policy.onnx")
 
 from stable_baselines3 import PPO
+import obs_spec
+
+
+def _write_policy_meta(onnx_path: str, obs_width: int) -> None:
+    """Write policy_meta.json next to the ONNX file — the obs encoding that the
+    browser (web/ai_policy.js) loads and uses. Single-sourced from obs_spec; the
+    checkpoint's actual lookahead is recovered from its obs width so lookahead-13
+    models export correctly. See CONVENTIONS.md #4."""
+    n_stack = obs_spec.N_STACK
+    if obs_width % n_stack != 0:
+        raise SystemExit(f"[onnx] obs width {obs_width} not divisible by n_stack {n_stack}")
+    n_obs = obs_width // n_stack
+    lookahead = n_obs - obs_spec.base_dims(obs_spec.PER_WHEEL) - obs_spec.REAR_N
+    if lookahead < 1:
+        raise SystemExit(
+            f"[onnx] recovered lookahead {lookahead} < 1 (width {obs_width}, "
+            f"per_wheel={obs_spec.PER_WHEEL}, rear={obs_spec.REAR_N}) — this checkpoint's "
+            f"topology doesn't match obs_spec; update obs_spec.PER_WHEEL/REAR_N/N_STACK.")
+    meta = obs_spec.to_dict(per_wheel=obs_spec.PER_WHEEL, lookahead_n=lookahead,
+                            rear_n=obs_spec.REAR_N, n_stack=n_stack)
+    if meta["input_width"] != obs_width:
+        raise SystemExit(f"[onnx] meta input_width {meta['input_width']} != model {obs_width}")
+    meta_path = os.path.join(os.path.dirname(os.path.abspath(onnx_path)), "policy_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+    print(f"[onnx] wrote {meta_path}  (n_obs={n_obs}, lookahead={lookahead}, stack={n_stack})")
 
 
 class OnnxablePolicy(torch.nn.Module):
@@ -96,6 +123,9 @@ def main():
         dynamic_axes={"observation": {0: "batch"}, "action_logits": {0: "batch"}},
         dynamo=False,
     )
+
+    # Emit the obs-encoding metadata the browser consumes (single source: obs_spec).
+    _write_policy_meta(args.output, obs_shape[0])
 
     # Verify it loads with onnxruntime and gives the same answer.
     try:

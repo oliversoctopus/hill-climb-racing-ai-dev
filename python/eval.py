@@ -41,6 +41,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from env import HillClimbEnv  # noqa: E402
+import obs_spec  # noqa: E402
 
 
 def _is_recurrent(model_path: str) -> bool:
@@ -75,7 +76,10 @@ def _build_env(*, randomize_terrain, seed, max_steps, render_mode, recurrent=Fal
     )
     env = DummyVecEnv([lambda: env_single])
     if not recurrent:
-        env = VecFrameStack(env, n_stack=4)
+        # Match training's frame-stack depth. HCR_N_STACK overrides the champion's
+        # 4 (a model trained with HCR_N_STACK=8 must be evaluated with 8). #5.
+        n_stack = int(os.environ.get("HCR_N_STACK", str(obs_spec.N_STACK)))
+        env = VecFrameStack(env, n_stack=n_stack)
     return env, env_single
 
 

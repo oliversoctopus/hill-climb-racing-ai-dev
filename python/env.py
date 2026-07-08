@@ -44,6 +44,7 @@ import math
 import os
 import random
 import sys
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -63,24 +64,24 @@ from constants import (  # noqa: E402
 )
 from ground import Ground, make_ground as _make_ground  # noqa: E402
 from js_backend import JSPhysics  # noqa: E402
+import obs_spec  # noqa: E402  (single source of the obs encoding; CONVENTIONS.md #4)
 
-GROUND_LOOKAHEAD_N = 6   # default; per-env override via lookahead_n= / HCR_LOOKAHEAD_N.
-                         # 6 * skip 5 * 15px = 375px (12.5m) ahead. 13 = 900px (30m),
-                         # the full human view (car sits at screen x=350 of 1280).
-GROUND_LOOKAHEAD_SKIP = 5
-# Rearward terrain samples: lets the policy see the ground behind it so it can
-# judge whether backing up to escape a pothole is viable. -75/-150/-225 px
-# (skip 5 * 15px smoothness). DISABLED (=0) for the reverse-curriculum A/B so
-# obs reverts to the champion's 12-dim per-wheel layout — only the curriculum
-# changes between the two arms. The JS/ai_policy.js rear code stays in the tree
-# (guarded on rear_n>0), so re-enabling is a one-line change. Set PPO_REAR_N=0
-# in ai_policy.js at deploy time to match.
-GROUND_REAR_N = 0
-GROUND_REAR_SKIP = 5
-COYOTE_FRAMES = 10
+# Obs topology + normalization constants are single-sourced in obs_spec.py
+# (CONVENTIONS.md #4); these module aliases keep existing references working.
+# GROUND_LOOKAHEAD_N is the DEFAULT (per-env override via lookahead_n= /
+# HCR_LOOKAHEAD_N; 6 * skip 5 * 15px = 375px/12.5m ahead, 13 = 900px/30m = the
+# full human view). Rearward samples (GROUND_REAR_N) let the policy see behind
+# it (escape-a-pothole vision); DISABLED (=0) for the deployed champion — the
+# JS/ai_policy.js rear code stays guarded on rear_n>0, so re-enabling means
+# bumping obs_spec.REAR_N and retraining.
+GROUND_LOOKAHEAD_N = obs_spec.LOOKAHEAD_N
+GROUND_LOOKAHEAD_SKIP = obs_spec.LOOKAHEAD_SKIP
+GROUND_REAR_N = obs_spec.REAR_N
+GROUND_REAR_SKIP = obs_spec.REAR_SKIP
+COYOTE_FRAMES = obs_spec.COYOTE_FRAMES
 
-GROUND_CLEARANCE_MIN = -3.0
-GROUND_CLEARANCE_MAX = 10.0
+GROUND_CLEARANCE_MIN = obs_spec.CLEARANCE_MIN_M
+GROUND_CLEARANCE_MAX = obs_spec.CLEARANCE_MAX_M
 
 # ---- In-episode "nudge" (exploration perturbation) ----
 # Occasionally kick the chassis with a small, recoverable velocity perturbation
@@ -94,6 +95,61 @@ NUDGE_GRACE_TICKS = 30    # ~1s: suppress the death penalty for this many ticks
                           # the policy (cf. the over-caution the death-penalty
                           # experiments showed). Also blocks back-to-back nudges.
 NUDGE_LINEAR_FRAC = 1.0   # peak |linear vx/vy| nudge (m/s) = NUDGE_LINEAR_FRAC * nudge_mag
+
+
+@dataclass
+class EnvConfig:
+    """Resolved environment configuration. Values come from constructor kwargs,
+    then HCR_* env vars OVERRIDE them (env wins — this is what lets SubprocVecEnv
+    workers inherit config without pickling it through the process boundary). An
+    override that actually changes a value is logged, so it isn't silent. Single
+    source of the env config surface (CONVENTIONS.md #5)."""
+
+    per_wheel_obs: bool = obs_spec.PER_WHEEL
+    reward_shaping: bool = True
+    death_penalty: float = 50.0
+    lookahead_n: int = obs_spec.LOOKAHEAD_N
+    spawn_jitter: float = 0.0
+    nudge_prob: float = 0.0
+    nudge_mag: float = 0.5
+    difficulty_max: float = 0.0
+    difficulty_override: Optional[float] = None   # HCR_DIFFICULTY only (no kwarg)
+
+    # (attr, env_var, parse_env_string, normalize). `normalize` runs on the
+    # resolved value from EITHER source, matching the old `self.x = max(...)`.
+    _SPEC = [
+        ("per_wheel_obs",       "HCR_PER_WHEEL",      lambda s: s == "1", None),
+        ("reward_shaping",      "HCR_REWARD_SHAPING", lambda s: s == "1", None),
+        ("death_penalty",       "HCR_DEATH_PENALTY",  float,              float),
+        ("lookahead_n",         "HCR_LOOKAHEAD_N",    int,                lambda v: max(1, int(v))),
+        ("spawn_jitter",        "HCR_SPAWN_JITTER",   float,              lambda v: max(0.0, float(v))),
+        ("nudge_prob",          "HCR_NUDGE_PROB",     float,              lambda v: max(0.0, float(v))),
+        ("nudge_mag",           "HCR_NUDGE_MAG",      float,              lambda v: max(0.0, float(v))),
+        ("difficulty_max",      "HCR_DIFFICULTY_MAX", float,              lambda v: max(0.0, min(1.0, float(v)))),
+        ("difficulty_override", "HCR_DIFFICULTY",     float,              lambda v: max(0.0, min(1.0, float(v)))),
+    ]
+
+    @classmethod
+    def resolve(cls, **kwargs) -> "EnvConfig":
+        cfg = cls(**kwargs)
+        overrides = []
+        for attr, env_var, parse, normalize in cls._SPEC:
+            raw = os.environ.get(env_var)
+            before = getattr(cfg, attr)
+            if raw is not None:
+                try:
+                    setattr(cfg, attr, parse(raw))
+                except (ValueError, TypeError):
+                    pass   # unparseable env var -> keep the kwarg/default
+            val = getattr(cfg, attr)
+            if normalize is not None and val is not None:
+                val = normalize(val)
+                setattr(cfg, attr, val)
+            if raw is not None and val != before:
+                overrides.append(f"{env_var}={val!r} (kwarg/default {before!r})")
+        if overrides:
+            print("[env] HCR override: " + ", ".join(overrides), file=sys.stderr)
+        return cfg
 
 
 class HillClimbEnv(gym.Env):
@@ -126,69 +182,31 @@ class HillClimbEnv(gym.Env):
     ):
         super().__init__()
 
-        # Config flags also accept env-var override so SubprocVecEnv subprocesses
-        # can inherit them without plumbing through pickle. Both default ON
-        # (the champion recipe); set "0" to eval legacy 11-dim checkpoints.
-        _pw_env = os.environ.get("HCR_PER_WHEEL")
-        if _pw_env is not None:
-            per_wheel_obs = _pw_env == "1"
-        _rs_env = os.environ.get("HCR_REWARD_SHAPING")
-        if _rs_env is not None:
-            reward_shaping = _rs_env == "1"
-        _dp_env = os.environ.get("HCR_DEATH_PENALTY")
-        if _dp_env is not None:
-            try:
-                death_penalty = float(_dp_env)
-            except ValueError:
-                pass
-        _la_env = os.environ.get("HCR_LOOKAHEAD_N")
-        if _la_env is not None:
-            try:
-                lookahead_n = max(1, int(_la_env))
-            except ValueError:
-                pass
-        self.lookahead_n = max(1, int(lookahead_n))
-        _sj_env = os.environ.get("HCR_SPAWN_JITTER")
-        if _sj_env is not None:
-            try:
-                spawn_jitter = float(_sj_env)
-            except ValueError:
-                pass
-        self.spawn_jitter = max(0.0, float(spawn_jitter))
-        _np_env = os.environ.get("HCR_NUDGE_PROB")
-        if _np_env is not None:
-            try:
-                nudge_prob = float(_np_env)
-            except ValueError:
-                pass
-        _nm_env = os.environ.get("HCR_NUDGE_MAG")
-        if _nm_env is not None:
-            try:
-                nudge_mag = float(_nm_env)
-            except ValueError:
-                pass
-        self.nudge_prob = max(0.0, float(nudge_prob))
-        self.nudge_mag = max(0.0, float(nudge_mag))
-        _fmax_env = os.environ.get("HCR_DIFFICULTY_MAX")
-        if _fmax_env is not None:
-            try:
-                difficulty_max = float(_fmax_env)
-            except ValueError:
-                pass
-        # Fixed-difficulty override (pins every episode's f, bypassing sampling).
-        # Used by eval/probes to render a specific difficulty; None = sample.
-        self._difficulty_override: Optional[float] = None
-        _diff_env = os.environ.get("HCR_DIFFICULTY")
-        if _diff_env is not None:
-            try:
-                self._difficulty_override = max(0.0, min(1.0, float(_diff_env)))
-            except ValueError:
-                pass
-        self.per_wheel_obs = per_wheel_obs
-        self.reward_shaping = reward_shaping
-        self.death_penalty = float(death_penalty)
+        # Resolve config: constructor kwargs, then HCR_* env vars override them
+        # (env wins; changes are logged). Single source: EnvConfig (CONVENTIONS.md #5).
+        cfg = EnvConfig.resolve(
+            per_wheel_obs=per_wheel_obs,
+            reward_shaping=reward_shaping,
+            death_penalty=death_penalty,
+            lookahead_n=lookahead_n,
+            spawn_jitter=spawn_jitter,
+            nudge_prob=nudge_prob,
+            nudge_mag=nudge_mag,
+            difficulty_max=difficulty_max,
+        )
+        self.cfg = cfg
+        self.per_wheel_obs = cfg.per_wheel_obs
+        self.reward_shaping = cfg.reward_shaping
+        self.death_penalty = cfg.death_penalty
+        self.lookahead_n = cfg.lookahead_n
+        self.spawn_jitter = cfg.spawn_jitter
+        self.nudge_prob = cfg.nudge_prob
+        self.nudge_mag = cfg.nudge_mag
+        # Fixed-difficulty override (pins every episode's f; HCR_DIFFICULTY only,
+        # no kwarg). None = sample normally.
+        self._difficulty_override: Optional[float] = cfg.difficulty_override
 
-        if per_wheel_obs:
+        if self.per_wheel_obs:
             # angle + 2 per-wheel + 3 vel/angvel + N ground ahead + rear ground
             n_dim = 6 + self.lookahead_n + GROUND_REAR_N
             low = np.full(n_dim, -1.0, dtype=np.float32)
@@ -236,7 +254,7 @@ class HillClimbEnv(gym.Env):
         # f_max is the current ceiling of the difficulty range; each episode
         # draws f ~ U(0, f_max). The callback raises f_max over training. f=0 is
         # normal, so f_max=0 (the default, and eval) means pure-normal terrain.
-        self._f_max = max(0.0, min(1.0, float(difficulty_max)))
+        self._f_max = cfg.difficulty_max
         # f used to build THIS episode's terrain (sampled in reset()).
         self._difficulty = 0.0
         # Per-episode difficulty RNG, seeded deterministically per worker so a
@@ -485,32 +503,32 @@ class HillClimbEnv(gym.Env):
                 obs_grounded = 1.0 if self.last_grounded_rear < COYOTE_FRAMES else 0.0
 
         # ang vel, linear velocity
-        obs_av = max(-1.0, min(1.0, state["ang_vel"] / 4.0))
-        obs_vx = max(-1.0, min(1.0, state["vx"] / 17.0))
-        obs_vy = max(-1.0, min(1.0, state["vy"] / 12.0))
+        obs_av = max(-1.0, min(1.0, state["ang_vel"] / obs_spec.ANG_VEL_SCALE))
+        obs_vx = max(-1.0, min(1.0, state["vx"] / obs_spec.VX_SCALE))
+        obs_vy = max(-1.0, min(1.0, state["vy"] / obs_spec.VY_SCALE))
 
         # lookahead_n ground clearance samples ahead
         chassis_bottom_y_m = state["y"] + CHASSIS_HEIGHT / SCALE
         clearance_center = 0.5 * (GROUND_CLEARANCE_MAX + GROUND_CLEARANCE_MIN)
         clearance_half = 0.5 * (GROUND_CLEARANCE_MAX - GROUND_CLEARANCE_MIN)
-        positions_px = state["ground_samples"]
+        positions_m = state["ground_samples"]   # meters (js_backend getPositions)
         ground_samples = []
         for i in range(self.lookahead_n):
-            pos_y_px = positions_px[i] if i < len(positions_px) else positions_px[-1]
-            c = pos_y_px / SCALE - chassis_bottom_y_m
+            pos_m = positions_m[i] if i < len(positions_m) else positions_m[-1]
+            c = pos_m - chassis_bottom_y_m
             c = max(GROUND_CLEARANCE_MIN, min(GROUND_CLEARANCE_MAX, c))
             ground_samples.append((c - clearance_center) / clearance_half)
 
         # Rearward samples (same clearance encoding). Empty if the JS layer
         # wasn't asked for them; pad with the nearest value for safety.
-        rear_px = state.get("ground_samples_rear", [])
+        rear_m = state.get("ground_samples_rear", [])   # meters
         rear_samples = []
         for i in range(GROUND_REAR_N):
-            if rear_px:
-                pos_y_px = rear_px[i] if i < len(rear_px) else rear_px[-1]
+            if rear_m:
+                pos_m = rear_m[i] if i < len(rear_m) else rear_m[-1]
             else:
-                pos_y_px = positions_px[0]  # fall back to the under-chassis sample
-            c = pos_y_px / SCALE - chassis_bottom_y_m
+                pos_m = positions_m[0]  # fall back to the under-chassis sample
+            c = pos_m - chassis_bottom_y_m
             c = max(GROUND_CLEARANCE_MIN, min(GROUND_CLEARANCE_MAX, c))
             rear_samples.append((c - clearance_center) / clearance_half)
 

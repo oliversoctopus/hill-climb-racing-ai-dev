@@ -103,6 +103,10 @@ python\.venv\Scripts\python.exe python\tests\test_saverestore.py         # save/
 
 ## Conventions & gotchas (read before changing things)
 
+**Coding conventions live in `CONVENTIONS.md`** (units, angles, Python↔JS
+constant sync, magic numbers, …) — read that before editing code. The gotchas
+below are project-specific traps.
+
 1. **Use the venv python** (`python/.venv/Scripts/python.exe`).
 2. **Per-wheel obs + reward shaping are default-on everywhere** (env, train,
    eval) since the 2026-06-06 CLI cleanup. Env-var overrides:
