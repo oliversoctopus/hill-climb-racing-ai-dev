@@ -1,26 +1,19 @@
-"""Port of Ground.js.
+"""Terrain generator (port of Ground.js randomizeGround).
 
-Terrain is stored as a list of (x_px, y_px) vectors in *pixel* space, just
-like the JS version. They get divided by SCALE when we hand them to Box2D.
-
-Two static bodies share the same vertex list:
-  - dirt body: edges collide only with CHASSIS
-  - grass body: edges offset upward by grassThickness/SCALE, collide with WHEEL and PERSON
-
-That dual-layer setup matches sketch.js / Ground.js: wheels roll on grass, the
-chassis only stops when its hull hits the dirt underneath.
+Produces the list of (x_px, y_px) vectors in *pixel* space (like the JS version),
+plus the grass-sprite picks and the spawn Y. The Box2D bodies are built from these
+vectors by the JS backend (js_backend.py _buildGroundBodies), which mirrors
+Ground.js's dual-layer setup: a dirt body (collides with the chassis) and a grass
+body offset up by grassThickness/SCALE (collides with wheels/person).
 """
 
 from __future__ import annotations
 
 import json
-import math
 import random
 from typing import List, Tuple
 
 import numpy as np
-
-from Box2D import b2World, b2EdgeShape, b2FixtureDef, b2Filter, b2Vec2
 
 from constants import (
     SCALE,
@@ -29,66 +22,18 @@ from constants import (
     GROUND_DISTANCE,
     GROUND_SMOOTHNESS,
     GROUND_GRASS_THICKNESS,
-    GROUND_FRICTION,
-    GROUND_RESTITUTION,
     GROUND_DIFFICULTY,
-    DIRT_CATEGORY,
-    DIRT_MASK,
-    GRASS_CATEGORY,
-    GRASS_MASK,
     SPAWN_VECTOR_INDEX,
     SPAWN_Y_BACK_FROM_GROUND,
 )
 
-# Pure-Python Perlin noise. p5.js uses 4 octaves with 0.5 falloff by default,
-# so we match that — terrain comes out with the same kind of layered roughness.
-class _Perlin1D:
-    def __init__(self, seed: int = 0):
-        rng = random.Random(seed)
-        perm = list(range(256))
-        rng.shuffle(perm)
-        self.perm = perm * 2  # double for index-overflow safety
-
-    @staticmethod
-    def _fade(t: float) -> float:
-        return t * t * t * (t * (t * 6 - 15) + 10)
-
-    def noise(self, x: float) -> float:
-        xi = int(math.floor(x))
-        xf = x - math.floor(x)
-        a = self.perm[xi & 255]
-        b = self.perm[(xi + 1) & 255]
-        g0 = 1.0 if (a & 1) else -1.0
-        g1 = 1.0 if (b & 1) else -1.0
-        u = self._fade(xf)
-        v0 = g0 * xf
-        v1 = g1 * (xf - 1)
-        return v0 * (1 - u) + v1 * u  # roughly [-1, 1]
-
-    def fractal(self, x: float, octaves: int = 4, persistence: float = 0.5) -> float:
-        total = 0.0
-        amp = 1.0
-        freq = 1.0
-        max_amp = 0.0
-        for _ in range(octaves):
-            total += self.noise(x * freq) * amp
-            max_amp += amp
-            amp *= persistence
-            freq *= 2.0
-        # Map roughly [-1, 1] -> [0, 1]
-        return (total / max_amp + 1.0) * 0.5
-
-
-# Terrain generator. Default = p5.js's exact noise() algorithm (see p5_noise.py)
-# so terrain distribution matches the actual Code Bullet game. Set
-# ground.USE_P5_NOISE = False before importing env / building Ground if you
-# want the original gradient-Perlin terrain (e.g. to reproduce older trained
-# checkpoints).
+# Terrain generator: p5.js's exact noise() algorithm (see p5_noise.py), so the
+# terrain distribution matches the actual Code Bullet game.
 from p5_noise import P5Noise as _P5Noise
 
 
 class _P5NoiseAdapter:
-    """Wraps P5Noise to expose the same .fractal(x) interface as _Perlin1D."""
+    """Wraps P5Noise to expose a scalar .fractal(x) + vectorized .fractal_array(xs)."""
 
     def __init__(self, seed: int):
         self._noise = _P5Noise(int(seed))
@@ -102,7 +47,6 @@ class _P5NoiseAdapter:
         return self._noise.noise_array(xs)
 
 
-USE_P5_NOISE = True
 _NoiseClass = _P5NoiseAdapter
 
 _perlin_state = {"gen": _NoiseClass(0)}
@@ -124,15 +68,19 @@ class Ground:
         self.steepness_level = 50 + GROUND_DIFFICULTY
         self.spawning_y: float = 0.0
 
-        self.dirt_body = None
-        self.grass_body = None
-
     # ------------------------------------------------------------------
     # Terrain generation (mirrors Ground.js randomizeGround)
     # ------------------------------------------------------------------
     def randomize(self, seed: float | None = None, difficulty: float = 0.0) -> None:
-        """Generate terrain. ``difficulty`` (``f``) in [0, 1] is the REVERSE-
-        curriculum knob: it raises the steepness FLOOR while the ceiling stays
+        """Generate terrain. ``difficulty=0`` (the default, and everything the live
+        env/eval uses) is normal terrain.
+
+        RETIRED EXPERIMENT: ``difficulty`` (``f``) > 0 is the reverse-curriculum
+        knob (tested, no benefit — see PROJECT_STATUS / the archived trainer). It's
+        kept functional because the rc_* diagnostics still exercise it, but nothing
+        on the live training/eval path sets f > 0.
+
+        ``f`` in [0, 1] raises the steepness FLOOR while the ceiling stays
         fixed at normal's hardest (250). Tracks get harder *overall* but never
         *steeper* than terrain that already occurs in normal play.
 
@@ -162,10 +110,6 @@ class Ground:
             seed = random.uniform(0, 100000)
         gen = _NoiseClass(int(seed * 1000) & 0x7FFFFFFF)
         _perlin_state["gen"] = gen
-        if not hasattr(gen, "fractal_array"):
-            # Legacy noise class without a vectorized path (_Perlin1D).
-            self._randomize_scalar(seed=seed, difficulty=difficulty)
-            return
         starting_point = float(seed)
 
         # Steepness profile. f raises the floor (130 -> 130+120f); the ceiling
@@ -346,52 +290,14 @@ class Ground:
             )
 
     # ------------------------------------------------------------------
-    # Build Box2D bodies (Ground.js setBodies / addEdge)
-    # ------------------------------------------------------------------
-    def add_to_world(self, world: b2World) -> None:
-        # dirt body: edges through the raw vector list
-        self.dirt_body = world.CreateStaticBody(position=(0, 0), userData={"id": "ground", "owner": self})
-        self.grass_body = world.CreateStaticBody(position=(0, 0), userData={"id": "ground", "owner": self})
-
-        gth_m = self.grass_thickness / SCALE
-
-        for k in range(1, len(self.vectors)):
-            a = self.vectors[k - 1]
-            b = self.vectors[k]
-            # dirt
-            self._add_edge(
-                self.dirt_body,
-                (a[0] / SCALE, a[1] / SCALE),
-                (b[0] / SCALE, b[1] / SCALE),
-                category=DIRT_CATEGORY,
-                mask=DIRT_MASK,
-            )
-            # grass (offset upward by grass_thickness)
-            self._add_edge(
-                self.grass_body,
-                (a[0] / SCALE, a[1] / SCALE - gth_m),
-                (b[0] / SCALE, b[1] / SCALE - gth_m),
-                category=GRASS_CATEGORY,
-                mask=GRASS_MASK,
-            )
-
-    @staticmethod
-    def _add_edge(body, a, b, *, category: int, mask: int) -> None:
-        fixture = b2FixtureDef(
-            shape=b2EdgeShape(vertices=[b2Vec2(*a), b2Vec2(*b)]),
-            friction=GROUND_FRICTION,
-            restitution=GROUND_RESTITUTION,
-            filter=b2Filter(categoryBits=category, maskBits=mask),
-        )
-        body.CreateFixture(fixture)
-
-    # ------------------------------------------------------------------
     # Vision helper (Ground.js getPositions)
     # ------------------------------------------------------------------
     def get_positions(self, x_m: float, n: int, skip: int) -> List[float]:
         """Return *n* y-values (in pixel space) at and after world-x *x_m* (meters).
 
-        Mirrors Ground.js getPositions, which the JS version uses for vision.
+        LEGACY: only ``legacy_pybox2d/diagnostics/compat_envs.py`` still calls this.
+        The live JS-backed path samples the ground in js_backend (in meters); see
+        that module's getPositions. Kept so the legacy diagnostics still import.
         """
         x_px = x_m * SCALE
         out: List[float] = []

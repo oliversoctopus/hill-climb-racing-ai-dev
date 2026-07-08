@@ -60,7 +60,6 @@ from constants import (  # noqa: E402
     CANVAS_HEIGHT,
     SPAWN_X,
     CHASSIS_HEIGHT,
-    SPAWN_Y_BACK_FROM_GROUND,
 )
 from ground import Ground, make_ground as _make_ground  # noqa: E402
 from js_backend import JSPhysics  # noqa: E402
@@ -278,6 +277,10 @@ class HillClimbEnv(gym.Env):
         self._spawn_x_px = float(SPAWN_X)
 
     # ------------------------------------------------------------------
+    # RETIRED EXPERIMENT — reverse curriculum (tested, no benefit). These methods
+    # + _sample_difficulty are kept functional only for the archived trainer
+    # (archive/train_reverse_curriculum.py) and the rc_* diagnostics; the live
+    # training/eval path never raises f_max above 0. See CONVENTIONS.md #8.
     def set_difficulty_max(self, f_max: float) -> None:
         """Set the reverse-curriculum ceiling f_max in [0, 1]. Called by the
         training callback each rollout (via VecEnv.env_method) to expand the
@@ -553,9 +556,7 @@ class HillClimbEnv(gym.Env):
             self._renderer = Renderer(title="Hill Climb (JS physics)")
         # Pull fresh geometry from JS each frame.
         rs = self._js.render_state()
-        # Camera follows the chassis.
-        chassis_x_px = rs["chassis_polys"][0][0][0] if rs.get("chassis_polys") else SPAWN_X
-        # Better: read chassis center from the last state() (cheap to recompute).
+        # Camera follows the chassis (read its center from state()).
         st = self._js.state(self.lookahead_n, GROUND_LOOKAHEAD_SKIP)
         car_x_px = st["x"] * SCALE
         self._renderer.update_camera(car_x_px, SPAWN_X)

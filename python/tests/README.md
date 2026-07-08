@@ -16,3 +16,6 @@ python\.venv\Scripts\python.exe python\tests\test_saverestore.py
 - **test_saverestore.py** — characterizes `JSPhysics.save_state()/restore_state()`
   fidelity (the backtracking/MPC search depends on it). Needs
   `checkpoints/seed2_resume_11611776_steps.zip`.
+- **test_obs_parity.py** — loads `web/ai_policy.js` in V8 and asserts its
+  `_buildObs` produces byte-identical obs to `env.py._build_obs` (the obs formula
+  is hand-mirrored across the two runtimes; CONVENTIONS.md #9).

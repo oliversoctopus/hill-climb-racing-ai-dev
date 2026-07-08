@@ -1,8 +1,15 @@
-"""Constants mirroring sketch.js. All values copied from the JS source of truth.
+"""Physics / geometry constants. TWO groups (see the banner further down):
 
-JS uses (x, y) with y growing downward and gravity (0, +10). We keep that
-convention everywhere — both the physics world and the renderer assume
-y-down. That way every value here matches the JS code 1:1.
+  * LIVE — consumed by the JS-backed env / ground / obs path: SCALE, canvas &
+    frame rate, spawn, chassis + wheel DIMENSIONS, GROUND_*, collision categories.
+    These match the JS source 1:1.
+  * LEGACY pybox2d tuning — body densities/frictions/damping, motor torques and
+    joint freqs. Empirically tuned for the RETIRED pybox2d port; NOT used by the
+    live path (the JS physics reads its own values from web/*.js). They
+    deliberately DIVERGE from JS (see the per-line 'JS:' notes) and are kept only
+    for legacy_pybox2d. See CONVENTIONS.md #8.
+
+Convention: (x, y) with y growing downward, gravity (0, +10) (matches the JS game).
 """
 
 import math
@@ -40,15 +47,17 @@ DIRT_MASK = CHASSIS_CATEGORY
 PERSON_MASK = GRASS_CATEGORY
 
 # ----------------------------------------------------------------------
-# Box2D 2.0 → 2.3 version-drift compensation
+# LEGACY pybox2d tuning (NOT used by the live JS-backed path)
 # ----------------------------------------------------------------------
-# JS uses Box2D.js (Erin Catto's 2.0/2.1 port). pybox2d uses Box2D 2.3.10,
-# whose constraint solver is more accurate. Same parameters give different
-# behavior: Box2D 2.3 conserves energy too well (limit-cycle oscillation) and
-# friction > 1 is honored (where 2.0 effectively capped near 1.0).
-# These values were found empirically by scipy.optimize.minimize matching the
-# Python trajectory to a JS reference trace on a hilly terrain (see tune.py,
-# measure.html, measure.py). The JS source-of-truth values are kept in comments.
+# The body densities/frictions/damping, motor torques and joint freqs below were
+# tuned empirically for the RETIRED pybox2d port (scipy.optimize matching a JS
+# reference trace; see legacy_pybox2d/tune.py). The LIVE path runs the real JS
+# physics (js_backend.py loads web/*.js), which reads its own values — so these
+# tuned numbers are DEAD for training/eval and deliberately diverge from JS (see
+# each 'JS:' note). Only legacy_pybox2d consumes them. CONVENTIONS.md #8.
+#
+# EXCEPTION — the plain DIMENSIONS in this block are still LIVE: CHASSIS_WIDTH,
+# CHASSIS_HEIGHT (obs + backtrack render), WHEEL_SIZE, PERSON_WIDTH, PERSON_HEIGHT.
 
 # ---- Chassis (Car.js) ----
 CHASSIS_WIDTH = 125

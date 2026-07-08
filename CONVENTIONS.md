@@ -56,15 +56,40 @@ these. Referenced from CLAUDE.md.
   from the value the caller passed (or the default), print one concise line. No
   log when the env var matches what the value would have been anyway.
 
+### 7. Comment density
+- Inline comments explain **why**, in 1–2 lines — not the history of how we got
+  here. Relocate long experiment narrative / rationale to `PROJECT_STATUS.md` and
+  link to it. Keep enough that intent is clear; cut the storytelling.
+
+### 8. Dead / experimental code
+- **Truly dead** (never executed on any live path): **delete** — git history
+  (root is versioned as of Tier 0) preserves it.
+- **Retired whole approaches**: move to `archive/` or `legacy_*/` (never delete
+  `archive/` or `legacy_pybox2d/`).
+- **Still-wired experiments that default OFF** (e.g. nudge, spawn-jitter): keep in
+  place behind a clear `# EXPERIMENTAL (off by default)` banner + the enabling flag.
+- When an experiment's scaffolding is **entangled with a live function** and can't
+  be cleanly moved, **quarantine it in place** with a banner rather than risk a
+  deep excision.
+
+### 9. Parity markers
+- Where a value is **single-sourced** (obs constants via `policy_meta.json`),
+  **delete** stale "must match X" prose — it's now false.
+- Where two implementations are **genuinely hand-mirrored** (`env.py._build_obs` ↔
+  `ai_policy.js._buildObs` formulas), **enforce with a test**
+  (`python/tests/test_obs_parity.py`) and add a short banner pointing at it.
+- `cb_reference/` is a frozen diff-baseline (we deliberately diverged for the joint
+  limit); document that once — it is NOT a sync target.
+
+### 11. Logging / debug output
+- **No stray `console.log` / `print`** in shipped code paths. Gate any debug output
+  behind an explicit flag (boolean / env var), default off.
+
 ---
 
 ## Deferred (decide when we reach the relevant tier — Claude will re-surface these)
 
 - **#3** sign/coordinate helper conventions (y-down, clearance/altitude)
-- **#7** comment density (trim inline "why"; relocate experiment history to PROJECT_STATUS)
-- **#8** dead / experimental code handling (delete vs archive vs banner+flag)
-- **#9** parity markers for hand-mirrored code
 - **#10** JS naming style (touched code only)
-- **#11** logging / debug output gating
 - **#12** domain landmark constants (the conflated score numbers)
 - **#13** `.gitattributes` line-ending normalization
