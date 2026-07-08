@@ -116,8 +116,14 @@ these. Referenced from CLAUDE.md.
   `window` globals the physics classes read; the classes are also loaded into V8 for
   training, which has no modules / no `window`).
 
+### 13. Line endings (decided = A)
+- **`.gitattributes` normalizes all text to LF** in the repo AND on checkout
+  (`* text=auto eol=lf`), in both the root and `web/` repos; binary assets excluded.
+  The working tree is already LF; this pins it so `core.autocrlf=true` can't flip files
+  to CRLF. Silences the "LF will be replaced by CRLF" warnings.
+
 ---
 
-## Deferred (decide when we reach the relevant tier — Claude will re-surface these)
+## Deferred
 
-- **#13** `.gitattributes` line-ending normalization — anytime (orthogonal)
+- *(none — all conventions decided as of the 2026-07-07 refactor)*
