@@ -114,9 +114,20 @@ these. Referenced from CLAUDE.md.
   literals) AFTER the Tier 4 split shipped. **Done 2026-07-17:** the physics classes
   `web/{Car,Wheel,Person,Ground}.js` modernized the same way (`var`→`const`/`let` inside
   methods + a few no-op bare `this.field;` statements removed, `;;` cleaned, `&&`-guard →
-  `?.` in `Car.destroy`) — verified via the full parity suite (`test_vectorized_ground`,
-  `test_saverestore`, `test_obs_parity` all pass; obs bit-exact; deterministic eval
-  unchanged at 1495).
+  `?.` in `Car.destroy`). Then a **cleanup sweep** for what the earlier
+  passes missed: `web/ai_policy.js` (never lebab'd before — `var`→`const`/`let` + template
+  literals; outer IIFE and `this`-free methods arrowed); the reused sibling-loop
+  `var i`/`var pi`/`var vect` lebab conservatively left in `Car`/`Ground`/`render`/`sim`
+  (safe — each loop gets its own block-scoped binding, none captured in a closure); and a
+  broader lebab transform set (`obj-shorthand`, `obj-method`, remaining `template`) the
+  first `web/game/` pass didn't run — e.g. `{ actions: actions }`→`{ actions }`,
+  `{ GetPosition: function(){…} }`→`{ GetPosition(){…} }`. `node --check` passes on all 16
+  non-vendored files; remaining `var`s are all vendored (`libraries/`) or in comments.
+  **Left intentionally:** loose equality (`==`/`!=`) — it's valid, consistent, and some
+  cases (`x != null`) are the null-AND-undefined idiom that would change behavior if
+  tightened; not worth churning parity code for zero functional gain. Verified each round:
+  full parity suite (obs bit-exact, `max|py-js|=0`), `game/` import-link harness, and
+  deterministic eval unchanged at 1495.
 - **Two hard constraints that survive modernization** (do NOT "modernize" past these):
   1. The p5/Box2D **compat-shim block in `web/index.html` must keep its top-level
      declarations as `var`/`function`** — a top-level `var`/`function` in a classic script
