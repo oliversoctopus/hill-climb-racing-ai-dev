@@ -150,6 +150,9 @@ below are project-specific traps.
    the limits). Impact on the AI is nil in practice — the driver is near-massless
    and the limit only engages on rocket-mode-level impacts the policy never
    produces (200-ep seed-42 parity confirm unchanged; see PROJECT_STATUS).
+   **Also (2026-07-17):** `web/{Car,Wheel,Person,Ground}.js` were syntax-modernized
+   (`var`→`const`/`let` etc., behavior-preserving) — another cosmetic divergence from
+   `cb_reference/`. Verified obs-bit-exact + deterministic eval unchanged (CONVENTIONS #10).
 5. **ONNX export:** `export_onnx.py` uses `dynamo=False`, opset 11 — required for
    ONNX Runtime Web 1.18. Don't use the dynamo exporter or threaded WASM.
 6. **Obs encoding is single-sourced** in `python/obs_spec.py` → `export_onnx.py`

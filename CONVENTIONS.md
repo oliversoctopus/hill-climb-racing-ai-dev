@@ -79,8 +79,9 @@ these. Referenced from CLAUDE.md.
 - Where two implementations are **genuinely hand-mirrored** (`env.py._build_obs` ↔
   `ai_policy.js._buildObs` formulas), **enforce with a test**
   (`python/tests/test_obs_parity.py`) and add a short banner pointing at it.
-- `cb_reference/` is a frozen diff-baseline (we deliberately diverged for the joint
-  limit); document that once — it is NOT a sync target.
+- `cb_reference/` is a frozen diff-baseline; we deliberately diverged from it twice —
+  the torso↔chassis joint limit (behavioral) and the 2026-07-17 syntax modernization
+  (cosmetic) — so a raw diff against it is now noisy. It is NOT a sync target.
 
 ### 11. Logging / debug output
 - **No stray `console.log` / `print`** in shipped code paths. Gate any debug output
@@ -106,17 +107,27 @@ these. Referenced from CLAUDE.md.
   code uses these instead of bare subtractions.
 
 ### 10. JS naming style (decided Tier 4 = A)
-- **Codify the existing style; don't churn.** The web JS uses `var`, camelCase
-  functions, `_prefix` for internal helpers, `SCREAMING_CASE` constants — keep it.
-  Bring TOUCHED code to that style; do **not** migrate `var`→`let/const` or add arrow
-  functions as part of a structural change. **Done 2026-07-07:** `web/game/` was
-  modernized in its own isolated commit (AST-based `lebab`: `var`→`const`/`let`, arrow
-  callbacks where `this`-safe, template literals) AFTER the Tier 4 split shipped — so any
-  regression would have been unambiguously cosmetic, not structural. Note: the physics
-  classes + the p5/Box2D compat-shim block in
-  `web/index.html` MUST stay classic `var`/`function` (their top-level `var`s become the
-  `window` globals the physics classes read; the classes are also loaded into V8 for
-  training, which has no modules / no `window`).
+- **Codify the existing style; don't churn** as part of a *structural* change — keep
+  modernization to its own isolated, separately-verified commit so any regression is
+  unambiguously cosmetic, not structural. **Done 2026-07-07:** `web/game/` modernized
+  (AST-based `lebab`: `var`→`const`/`let`, arrow callbacks where `this`-safe, template
+  literals) AFTER the Tier 4 split shipped. **Done 2026-07-17:** the physics classes
+  `web/{Car,Wheel,Person,Ground}.js` modernized the same way (`var`→`const`/`let` inside
+  methods + a few no-op bare `this.field;` statements removed, `;;` cleaned, `&&`-guard →
+  `?.` in `Car.destroy`) — verified via the full parity suite (`test_vectorized_ground`,
+  `test_saverestore`, `test_obs_parity` all pass; obs bit-exact; deterministic eval
+  unchanged at 1495).
+- **Two hard constraints that survive modernization** (do NOT "modernize" past these):
+  1. The p5/Box2D **compat-shim block in `web/index.html` must keep its top-level
+     declarations as `var`/`function`** — a top-level `var`/`function` in a classic script
+     becomes a `window` property (which the physics classes and the `window.HCR` bridge
+     read); top-level `let`/`const`/`class` do **not** attach to `window`. So that block is
+     off-limits to `var`→`const` churn.
+  2. The physics class files must stay **classic scripts** (no `import`/`export`): they're
+     `eval`'d into V8 for training (`js_backend.py`), which has no module loader and no
+     `window`, and loaded by `legacy_neat/` via plain `<script>`. Their *internals* are
+     free to use modern syntax — V8 8.9 (PyMiniRacer's bundle) supports everything through
+     ES2020 — which is why the 2026-07-17 pass was safe.
 
 ### 13. Line endings (decided = A)
 - **`.gitattributes` normalizes all text to LF** in the repo AND on checkout
