@@ -153,6 +153,13 @@ below are project-specific traps.
    **Also (2026-07-17):** `web/{Car,Wheel,Person,Ground}.js` were syntax-modernized
    (`var`→`const`/`let` etc., behavior-preserving) — another cosmetic divergence from
    `cb_reference/`. Verified obs-bit-exact + deterministic eval unchanged (CONVENTIONS #10).
+   **Also (2026-09-29): browser-only Physics playground** (`web/game/tune.js`, Tools drawer):
+   ~45 knobs (gravity, densities, friction, motor, suspension, driver, sizes, rules, terrain).
+   Size knobs work via construction wrappers in `index.html`'s shim (Car accessors +
+   `Wheel`/`Person`/`Car` subclass rebinding) — the physics files are untouched and training
+   never loads the shim. Every hook is gated on "knob modified"; at stock the browser sim is
+   bit-identical to before (verified: terrain + 900-tick drive, 3 seeds). Note `Box2d.js`
+   polyfills `Object.defineProperty` (get/set only — it ignores `value`).
 5. **ONNX export:** `export_onnx.py` uses `dynamo=False`, opset 11 — required for
    ONNX Runtime Web 1.18. Don't use the dynamo exporter or threaded WASM.
 6. **Obs encoding is single-sourced** in `python/obs_spec.py` → `export_onnx.py`
@@ -301,13 +308,15 @@ web/                                         # the deployable static site (its o
   game/                                      #   markup + p5/Box2d compat shim + physics
     state,bridge,geom,modes,sim,             #   <script>s + a window.HCR bridge + one
     render,cheats,search,input,main.js,      #   <script type=module src=game/main.js>.
-    scenery,hud,fx,records.js                #   (2026-09 visual pass: scenery/hud/fx = canvas
+    scenery,hud,fx,records.js,tune.js,dev.js #   (2026-09 visual pass: scenery/hud/fx = canvas
   style.css                                  #   art + HUD + effects; records = localStorage
                                              #   best score / fastest finish per map + stored
                                              #   record-map terrains for the Records menu.)
   ai_policy.js, ai_policy.onnx               #   game/ = the app as ES modules (Tier 4 split
-  Car/Wheel/Person/Ground.js, Pics/          #   2026-07-07; incl. a Bug-probe panel, see
-  libraries/{Box2d,ort.min}.js + *.wasm      #   HOW_TO_PLAY §7). *** SINGLE SOURCE of the
+  Car/Wheel/Person/Ground.js, Pics/          #   2026-07-07; dev.js = password-gated dev mode:
+  libraries/{Box2d,ort.min}.js + *.wasm      #   overlays, step/quick-save, model swap, map
+                                             #   JSON, bug probe — HOW_TO_PLAY §8; the hash
+                                             #   check is a curtain, not security). *** SINGLE SOURCE of the
   vercel.json, README.md, HOW_TO_PLAY.md     #   physics JS (Box2d/Car/Wheel/Person/Ground) —
                                              #   the training path reads these too; they MUST
                                              #   stay classic (V8 has no modules/window), so

@@ -269,13 +269,20 @@ class Ground:
     # JSON IO (for terrain parity with JS playtest)
     # ------------------------------------------------------------------
     def load_json(self, path: str) -> None:
+        """Load save_json output, or the browser's dev-mode map export
+        ({"vertices": [[x, y], ...] px, "spawning_y": px, ...})."""
         with open(path, "r") as f:
             data = json.load(f)
-        self.vectors = [(float(v["x"]), float(v["y"])) for v in data["vectors"]]
+        if "vertices" in data:
+            self.vectors = [(float(x), float(y)) for x, y in data["vertices"]]
+        else:
+            self.vectors = [(float(v["x"]), float(v["y"])) for v in data["vectors"]]
         self.grass_positions = list(data.get("grass", []))
         if "distance" in data:
             self.distance = float(data["distance"])
-        if len(self.vectors) > SPAWN_VECTOR_INDEX:
+        if "spawning_y" in data:
+            self.spawning_y = float(data["spawning_y"])
+        elif len(self.vectors) > SPAWN_VECTOR_INDEX:
             self.spawning_y = self.vectors[SPAWN_VECTOR_INDEX][1] - SPAWN_Y_BACK_FROM_GROUND
 
     def save_json(self, path: str) -> None:

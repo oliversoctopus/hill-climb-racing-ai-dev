@@ -26,6 +26,7 @@ comparable; --baseline-k also runs paired Best-of-K on the same tracks.
 
 Run: python autorun/backtrack_search.py [n_tracks=30] [--ckpt PATH] [--baseline-k 0]
        [--smoke] [--snap-every 20] [--attempts 8] [--margin 400] [--budget 400000]
+     python autorun/backtrack_search.py --map-json hcr_map_X.json   # one browser-exported map
 """
 import os, sys, json, random
 import numpy as np
@@ -36,7 +37,7 @@ sys.path.insert(0, ROOT)
 from stable_baselines3 import PPO                                   # noqa: E402
 import env as E                                                     # noqa: E402
 from env import HillClimbEnv                                        # noqa: E402
-from ground import make_ground                                     # noqa: E402
+from ground import Ground, make_ground                             # noqa: E402
 from constants import (GROUND_DISTANCE, SPAWN_X, SCALE,             # noqa: E402
                        CHASSIS_WIDTH, CHASSIS_HEIGHT)
 
@@ -276,6 +277,7 @@ def main():
     budget = popflag("--budget", 400_000, int)
     target_px = popflag("--target-px", BEAT_PX, float)  # default: beat the game (the lip)
     tracks_sel = popflag("--tracks", None)               # e.g. "11" or "7,12,14" -> only those track ids
+    map_json = popflag("--map-json", None)               # a browser dev-mode map export -> just that map
     smoke = "--smoke" in argv
     if smoke:
         argv.remove("--smoke")
@@ -293,7 +295,12 @@ def main():
     model = PPO.load(ckpt, device="auto")
 
     tracks = []
-    for t in track_ids:
+    if map_json:
+        g = Ground()
+        g.load_json(map_json)
+        tracks.append((0, g))
+        track_ids = [0]
+    for t in ([] if map_json else track_ids):
         random.seed(987_000 + t)
         tracks.append((t, make_ground(None, difficulty=0.0)))
 
@@ -346,7 +353,8 @@ def main():
               f"both={int((solved & bc).sum())}  neither={int((~solved & ~bc).sum())}")
 
     stem = os.path.splitext(os.path.basename(ckpt))[0]
-    suffix = "" if tracks_sel is None else "_sel" + "-".join(map(str, track_ids))[:40]
+    suffix = ("_map-" + os.path.splitext(os.path.basename(map_json))[0][:40] if map_json
+              else "" if tracks_sel is None else "_sel" + "-".join(map(str, track_ids))[:40])
     outdir = os.path.join(HERE, "backtrack_runs"); os.makedirs(outdir, exist_ok=True)
     out = os.path.join(outdir, f"backtrack_{stem}{suffix}.npz")
     np.savez(out,
