@@ -201,8 +201,8 @@ below are project-specific traps.
   Harness `python/autorun/backtrack_search.py` (the offline pose-stream export
   `python/autorun/export_replay.py` still exists but the browser no longer ships
   pre-exported replays — the deleted `replays/` folder). `web/index.html` now runs
-  the search **live in-browser** via one button: **▶ Watch the AI beat the game
-  (or get close)** runs the Go-Explore search on the *current* terrain, then
+  the search **live in-browser** via one button: **▶ Watch the AI beat this map**
+  runs the Go-Explore search on the *current* terrain, then
   ghost-replays the result (flies off the end if it can, else shows the best run
   found). (This replaced the older pinned-track picker + `replays/` ghost-replay /
   "Load & drive".) Memories `backtracking-save-scum-search`,
@@ -300,7 +300,11 @@ web/                                         # the deployable static site (its o
   index.html                                 #   repo → Vercel). index.html = a thin shell:
   game/                                      #   markup + p5/Box2d compat shim + physics
     state,bridge,geom,modes,sim,             #   <script>s + a window.HCR bridge + one
-    render,cheats,search,input,main.js       #   <script type=module src=game/main.js>.
+    render,cheats,search,input,main.js,      #   <script type=module src=game/main.js>.
+    scenery,hud,fx,records.js                #   (2026-09 visual pass: scenery/hud/fx = canvas
+  style.css                                  #   art + HUD + effects; records = localStorage
+                                             #   best score / fastest finish per map + stored
+                                             #   record-map terrains for the Records menu.)
   ai_policy.js, ai_policy.onnx               #   game/ = the app as ES modules (Tier 4 split
   Car/Wheel/Person/Ground.js, Pics/          #   2026-07-07; incl. a Bug-probe panel, see
   libraries/{Box2d,ort.min}.js + *.wasm      #   HOW_TO_PLAY §7). *** SINGLE SOURCE of the
