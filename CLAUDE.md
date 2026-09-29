@@ -191,7 +191,11 @@ below are project-specific traps.
 11. **In THIS repo, "commit" means "commit AND push".** The user is the sole
    editor and this is low-stakes, so when they say commit, push to the remote in
    the same step (don't wait for a separate "push"). Applies only to this project.
-   (Only `web/` is a git repo → Vercel; the root is untracked.)
+   **Two repos:** `web/` (pushes to GitHub → Vercel) and the root (LOCAL-ONLY since
+   2026-07-07, no remote — tracks `python/` + docs; ignores `web/`, checkpoints, tb,
+   logs and result artifacts like `*.npz` / `backtrack_runs/` — see `.gitignore`). A
+   change spanning both = one commit in each; only `web/` gets pushed. Ignored result
+   files aren't recoverable from git, so don't overwrite them.
 
 ## Current state (updated 2026-07-07)
 

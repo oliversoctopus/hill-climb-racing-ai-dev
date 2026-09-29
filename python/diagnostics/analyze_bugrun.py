@@ -3,7 +3,7 @@
 The browser tool records the human car's full state every tick (chassis pose +
 angular velocity, per-wheel motor-enabled state + spin + on-ground, the motor
 joint and suspension reaction torques, key/action, and the zero-G flag), plus
-any moments you flagged with the "Flag reproduced" button.
+any moments you flagged with the "Flag unusual" button.
 
 This reads that JSON and, around each flag (and over the whole run), reports the
 signature of the spontaneous rotation: did chassis angular velocity grow while
