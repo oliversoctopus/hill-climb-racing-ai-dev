@@ -82,7 +82,7 @@ User idea ("cheat"): on death, don't restart from spawn: restore a physics snaps
 **CAVEAT:** this is a CONSTRUCTED stitched replay, not a better policy or a legit single-shot/Best-of-X number. Go-Explore "robustification" (BC the trajectories into a policy) would likely wash, as SIL/BC already did.
 
 **Artifacts / browser:** `python/autorun/export_replay.py` re-runs the (deterministic) search per track and can replay it to an EXACT per-tick pose stream (vertices px + spawn
-+ poses + body dims). **NOTE (web/ reorg):** the browser no longer ships pre-exported replays: the old pinned-track picker (**▶ Watch AI beat it** ghost-replay + **Load & drive**) and the `replays/` folder it read were removed. `web/index.html` now runs the Go-Explore search **live in-browser** on the *current* terrain via one button, **▶ Watch the AI beat the game (or get close)**, then ghost-replays the result. Memories: `backtracking-save-scum-search`, `true-score-ceiling-flyoff`.
++ poses + body dims). **NOTE (web/ reorg):** the browser no longer ships pre-exported replays: the old pinned-track picker (**▶ Watch AI beat it** ghost-replay + **Load & drive**) and the `replays/` folder it read were removed. `web/index.html` now runs the Go-Explore search **live in-browser** on the *current* terrain via one button, **▶ Watch the AI beat this map**, then ghost-replays the result.
 
 ## 2026-06-08 autonomous session (6 experiments, all negative/wash)
 Log: `python/autorun/RUNLOG.md`. **No deployable improvement found; champion + Best-of-X stays.** Results:
