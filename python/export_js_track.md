@@ -1,13 +1,10 @@
 # Exporting a JS track to JSON
 
-Porting-era aid: to compare the Python port side-by-side with the JS version on the
-**same** terrain, copy a track from the JS game and load it in `play.py`. (Rarely needed
-now that training runs the JS physics directly.)
+Porting-era aid: to compare the Python port side-by-side with the JS version on the **same** terrain, copy a track from the JS game and load it in `play.py`. (Rarely needed now that training runs the JS physics directly.)
 
 ## How to do it
 
-1. Open the legacy NEAT game **`legacy_neat/index.html`** in a browser (it exposes the
-   `groundTemplate` global used below). Open the developer console (F12).
+1. Open the legacy NEAT game **`legacy_neat/index.html`** in a browser (it exposes the `groundTemplate` global used below). Open the developer console (F12).
 2. Paste this snippet:
 
 ```js
@@ -18,15 +15,12 @@ copy(JSON.stringify({
 }));
 ```
 
-   That puts a JSON string on your clipboard. (`vectors` are stored in meters
-   in the JS object after `randomizeGround`, so we multiply by `SCALE` to get
-   pixel space — matching what `ground.py` expects.)
+That puts a JSON string on your clipboard. (`vectors` are stored in meters in the JS object after `randomizeGround`, so we multiply by `SCALE` to get pixel space — matching what `ground.py` expects.)
 
 3. Save it to a JSON file, e.g. `python/sample_track.json`.
 4. From `python/`, run `python play.py sample_track.json` — same terrain as the JS run.
 
-For visual side-by-side, refresh the JS page (so the terrain stays as
-exported), then drive both versions and compare:
+For visual side-by-side, refresh the JS page (so the terrain stays as exported), then drive both versions and compare:
 - Acceleration on the flat at spawn
 - Climb speed on the first hill
 - Wheelie/flip behavior
