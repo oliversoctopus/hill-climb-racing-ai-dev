@@ -44,10 +44,8 @@ python\.venv\Scripts\python.exe python\export_onnx.py <ckpt.zip>
 # Browser (ORT can't load over file://):
 python\.venv\Scripts\python.exe -m http.server 8765 --directory web   # http://localhost:8765/
 
-# Tests (python/tests/README.md):
-python\.venv\Scripts\python.exe python\tests\test_vectorized_ground.py
-python\.venv\Scripts\python.exe python\tests\test_saverestore.py
-python\.venv\Scripts\python.exe python\tests\test_obs_parity.py
+# Every test and doc check; run before finishing any change (python/tests/README.md):
+python\.venv\Scripts\python.exe python\tests\run.py
 ```
 
 ## Model, observation, reward
@@ -68,7 +66,7 @@ python\.venv\Scripts\python.exe python\tests\test_obs_parity.py
 - **Use the venv python.**
 - **Per-wheel obs and reward shaping are on by default** in env, train and eval. Env-var overrides: `HCR_PER_WHEEL=0` and `HCR_REWARD_SHAPING=0` for legacy 11-dim checkpoints, `HCR_DIFFICULTY`, `HCR_DIFFICULTY_MAX`, `HCR_LOOKAHEAD_N`. **Never delete `python/archive/`** unless the user says so.
 - **Default to the `_final` checkpoint.** The scan detects collapse; it does not pick a model, because the argmax of noisy 60-ep means is inflated. Snapshot-pick only if the final sits more than 150 below the plateau. Cite only 200-ep confirms. Cross-model claims need a paired A/B on identical tracks (PROJECT_STATUS *Model selection & eval protocol*).
-- **Don't modify the physics** (torque, motor, friction); it breaks browser parity. Edit physics JS only in `web/`. The physics files must stay classic scripts, since V8 has no module loader or `window`; `web/game/` reaches them through the `window.HCR` bridge. Known divergences from `cb_reference/`: an asymmetric torso↔chassis joint limit in `web/Car.js` (the limits must sit inside the upright basin; PROJECT_STATUS 2026-07-07) and cosmetic syntax modernization. The Physics playground (`web/game/tune.js`) is browser-only and gated on "knob modified", so a stock browser sim stays bit-identical; training never loads it. `Box2d.js` polyfills `Object.defineProperty` with get/set only and ignores `value`.
+- **Don't modify the physics** (torque, motor, friction); it breaks browser parity. Edit physics JS only in `web/`. The physics files must stay classic scripts, since V8 has no module loader or `window`; `web/game/` reaches them through the `window.HCR` bridge. Known divergences from `cb_reference/`: an asymmetric torso↔chassis joint limit in `web/Car.js` (the limits must sit inside the upright basin; PROJECT_STATUS *Driver ragdoll joint limits*) and cosmetic syntax modernization. The Physics playground (`web/game/tune.js`) is browser-only and gated on "knob modified", so a stock browser sim stays bit-identical; training never loads it. `Box2d.js` polyfills `Object.defineProperty` with get/set only and ignores `value`.
 - **ONNX export** uses `dynamo=False`, opset 11, for ONNX Runtime Web 1.18. No dynamo exporter, no threaded WASM.
 - **Obs encoding is single-sourced** in `python/obs_spec.py`. `export_onnx.py` writes `web/policy_meta.json`, which `web/ai_policy.js` loads and validates fail-closed. `test_obs_parity.py` checks `ai_policy.js` `_buildObs` against `env.py` `_build_obs`.
 - **Reboot before long sessions.** The machine leaks about 100 MB/h (unfixable; do not investigate) and long runs can hit `WinError 1450`.

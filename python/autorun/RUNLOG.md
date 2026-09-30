@@ -39,7 +39,7 @@ K=1 20.0% / 1476 ; K=2 33.3% / 1607 ; K=5 56.7% / 1757 ; K=8 65.0% / 1795 ; K=10
 - Queue after these: read seed2 A/B; after ml6, run multilife_eval (real E3 test) + launch seed3; then seed4; then E4 LSTM (may overlap a PPO run).
 
 ### E2 seed2 RESULT (paired A/B vs champion, 200 eps det, seed 42) — DONE
-seed2 1434.6 vs champion 1411.3; paired diff **+23.3**, 95% CI [-55,+101], p=0.56, per-track wins 101–99. **WASH** — seed luck is not a lever (matches the project's ±60 noise floor). (champion=1411 here vs documented 1367.5 = different track set; the paired +23 is the valid number.)
+seed2 1434.6 vs champion 1411.3; paired diff **+23.3**, 95% CI [-55,+101], p=0.56, per-track wins 101–99. **WASH**: seed luck is not a lever (matches the project's ±60 noise floor). (champion=1411 here vs documented 1367.5 = different track set; the paired +23 is the valid number.)
 - 10:1x −05:00 ml6 solo fps 2674 (~half the 16 logical cores) -> launched seed3 concurrently (hyperthread headroom = net throughput win). NOTE/lesson: cwd is `python/` (an early `cd python` persisted) -> use cwd-relative paths (`train.py`, `autorun/...`), NOT `python/...`. First seed3 launch failed exit1 on the doubled path (no stray files); relaunched OK.
 - Plan: if seed3 also washes, SKIP seed4 (champion is seed-robust); spend the budget on E3/E4 instead.
 - Now running: ml6 (E3, ~40min left) + seed3 (E2).
@@ -56,7 +56,7 @@ completion% @K=8: champ **65.0** / ml_nojit **40.0** / ml_jit **55.0**. oracle@K
 seed2 +23.3 (p=0.56), seed3 −32.0 (p=0.46), both vs champion, 200-ep paired. Two clean washes => champion (seed 1) is seed-robust; skip seed4 (picking the max of more seeds = winner's-curse noise). No deployable model from seed search.
 - 12:1x −05:00 KILLED ml3 probe: LSTM dropped to ~175 fps under its 4 workers. Sequential is cheaper (LSTM solo ~12h then ml3 clean n-envs8 ~1.2h < oversubscribed concurrent). LSTM runs SOLO now. Will run ml3-clean AFTER LSTM. This machine's LSTM ~175 fps -> ~12h for 8M (the reason the prior session balked at CPU LSTM). Armed bounded safety waiter (wake by ~14h even on hang).
 - Remaining queue (post-LSTM): A/B LSTM vs champion; ml3 clean (n-envs 8) + eval; optional E5 frame-stack-8; then SUMMARY.md + CLEANUP.md + stop-time.
-- 19:12 −05:00 E4 LSTM DONE: full 8M in 7.4h (~300 fps once solo). Final ep_rew_mean **303** (BELOW champ ~376 / seeds ~437) — early warning. Launched LSTM A/B vs champion + clean ml3 (n-envs 8) concurrently. Both healthy. (ml3_1 tb dir is from the killed probe -> cleanup.)
+- 19:12 −05:00 E4 LSTM DONE: full 8M in 7.4h (~300 fps once solo). Final ep_rew_mean **303** (BELOW champ ~376 / seeds ~437), an early warning. Launched LSTM A/B vs champion + clean ml3 (n-envs 8) concurrently. Both healthy. (ml3_1 tb dir is from the killed probe -> cleanup.)
 
 ### E4 LSTM RESULT (paired A/B vs champion, 200 eps det) — NEGATIVE (decisive)
 LSTM 964.3 vs champion 1411.3; paired diff **−447.0**, 95% CI [−535,−359], p<0.0001, champion wins **158/200**. RecurrentPPO (single-frame) is FAR worse than the frame-stacked MLP. Completing the run confirms the prior session's abort instinct. Lesson: added temporal memory (LSTM) HURTS this task; the explicit 4-frame stack + MLP is better. => deprioritize E5 frame-stack-8 (same temporal-memory direction, low prior).
@@ -82,7 +82,7 @@ make_ground rerolls ~22-33x (97% too-steep rejection); each reroll draws a fresh
 fs8 1296.9 vs champion 1409.3; paired diff **−112.4**, 95% CI [−207,−17], p=0.021, champion wins 67–51. sd_diff 526 (< 600 => real pairing). More explicit temporal context HURTS; frame-stack-4 is the sweet spot. Consistent with E4 LSTM.
 
 ## SESSION COMPLETE — 2026-06-08 21:59:46 −05:00 (~13h)
-All 6 experiments done; **none beat the champion**. Deliverables: PROJECT_STATUS.md + CLAUDE.md updated (experiment log, live levers, gotcha #10 corollary). Deleted smoke/scratch (ml_dbg ckpts, tb/ml_dbg_1, tb/ml3_1). Machine quiescent, 0 python procs, ~1.9GB consumed (leak, expected). Recommendation: keep champion + Best-of-X X=10 (already near-optimal); ~70% completion is a hard chaos ceiling. Highest-upside untried idea: true multi-life episode (credit across lives). No checkpoints pruned (per instruction) — see CLEANUP for recs.
+All 6 experiments done; **none beat the champion**. Deliverables: PROJECT_STATUS.md + CLAUDE.md updated (experiment log, live levers, gotcha #10 corollary). Deleted smoke/scratch (ml_dbg ckpts, tb/ml_dbg_1, tb/ml3_1). Machine quiescent, 0 python procs, ~1.9GB consumed (leak, expected). Recommendation: keep champion + Best-of-X X=10 (already near-optimal); ~70% completion is a hard chaos ceiling. Highest-upside untried idea: true multi-life episode (credit across lives). No checkpoints pruned (per instruction); see CLEANUP for recs.
 
 ## 2026-06-15 follow-up — compute vs decay (user Qs)
 Hypothesis: the eval ceiling is set by the DECAY schedule completing, not raw compute. Tests:

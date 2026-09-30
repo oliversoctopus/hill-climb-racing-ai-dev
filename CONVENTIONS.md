@@ -43,6 +43,7 @@ Coding conventions for this repo. They apply to new and touched code: when you t
 - A comment explains a non-obvious why (a constraint, a reason, a trap) in 1–2 lines. A file header says what the module is in a few lines.
 - No history of how the code got here, no dates, no experiment results or measured figures, and no restating what the code does. Those go in git or `PROJECT_STATUS.md`; if a decision needs defending, one line names the section.
 - Point at a doc by heading name, never by rule number, and never at CLAUDE.md from code.
+- `python/tests/voice.py` checks comment shape on lines changed since HEAD, and the banned and capped phrases everywhere; `python/tests/doc_refs.py` checks the pointers.
 
 ## Dead / experimental code
 
