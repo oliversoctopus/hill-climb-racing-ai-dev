@@ -388,4 +388,4 @@ python\.venv\Scripts\tensorboard.exe --logdir python\tb
 
 - `play.py` works but its pygame renderer is minimal vs the browser.
 - Checkpoints: pruned 2026-06-05 (3.8 GB → 46 MB) and again 2026-06-06. Training saves ~81/run, so it regrows fast. **Prune only with explicit user approval** (verify keepers → dry-run → delete).
-- The machine leaks kernel memory at ~100 MB/h (known, unfixable — do NOT investigate). Reboot before long sessions to avoid `WinError 1450`.
+- The ~100 MB/h kernel memory leak that caused `WinError 1450` on long runs was HP Omen Gaming Hub. Removing it fixed both.
