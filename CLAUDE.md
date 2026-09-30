@@ -1,362 +1,109 @@
 # CLAUDE.md — Hill Climb Racing AI
 
-Orientation for working in this repo. For the detailed experiment log / handoff,
-see **`PROJECT_STATUS.md`**; this file is the durable "how it works + how to
-work in it" summary.
+Rules and pointers for working in this repo. `PROJECT_STATUS.md` holds results, the experiment log and the reasoning behind these rules; `CONVENTIONS.md` holds the coding conventions.
 
 ## What this is
 
-A Hill Climb Racing AI: a PPO policy that drives a 2-wheeled car over
-procedurally-generated hilly terrain, maximizing forward distance. It trains in
-Python (Stable-Baselines3) and deploys to the browser via ONNX.
+A PPO policy drives a 2-wheeled car over procedurally generated hills, maximizing forward distance. It trains in Python (Stable-Baselines3) and runs in the browser via ONNX.
 
-**The physics is the unmodified JS game** (`Box2d.js` + `Wheel.js` + `Person.js`
-+ `Car.js`, Code Bullet's old game) run inside a V8 engine via PyMiniRacer — for
-both training and deployment. We did this because `pybox2d 2.3.10`'s solver
-allowed 30–100 mm of wheel drift the original `Box2d.js` (Box2D 2.0/2.1) doesn't;
-running the real JS physics gives exact browser parity (and lifted the score
-ceiling 836 → ~1300). **Do not restore pybox2d** — the archived port
-(`legacy_pybox2d/`) was deleted 2026-07-07; git history has it if ever needed.
+The physics is Code Bullet's JS game (`Box2d.js`, `Wheel.js`, `Person.js`, `Car.js`) run inside V8 via PyMiniRacer, for training and deployment alike, which gives exact browser parity. Do not restore pybox2d: its solver drifts where `Box2d.js` does not (PROJECT_STATUS *Physics history*).
 
-## Architecture / data flow
+## Architecture
 
 ```
 Training:  python/train.py (PPO, SubprocVecEnv ×8, VecFrameStack ×4)
   → python/env.py (gym.Env)
-    → python/js_backend.py (PyMiniRacer / V8): loads libraries/Box2d.js + Wheel/Person/Car.js
-    → python/ground.py generates terrain via python/p5_noise.py (p5.js noise port)
-      → hands vertex list to JS via build_world(); JS steps Box2D, returns obs JSON
-    → PPO reads obs, picks discrete action
+    → python/js_backend.py (V8): loads web/libraries/Box2d.js + web/{Wheel,Person,Car}.js
+    → python/ground.py terrain via python/p5_noise.py (p5.js noise port)
+      → vertex list handed to JS via build_world(); JS steps Box2D, returns obs JSON
 
 Browser:   web/index.html → web/libraries/ort.min.js + web/ai_policy.onnx
-           + web/ai_policy.js + the SAME Wheel/Person/Car/Ground/Box2d.js physics
-           (the deployable static site lives entirely in web/ — its own git repo,
-            deployed to Vercel. The physics JS is SINGLE-SOURCED here: js_backend.py
-            reads web/Wheel.js etc. directly, so there is no root copy to drift.)
+           + web/ai_policy.js + the same physics JS
 ```
 
-## Environment / running things
+`web/` is the deployable static site and its own git repo (GitHub → Vercel). The physics JS lives only in `web/`; `js_backend.py` reads it from there.
 
-- **Python interpreter:** `python/.venv/Scripts/python.exe` (Python 3.13).
-  All deps (SB3, gymnasium, py_mini_racer, onnx/onnxruntime, pygame, tb) are
-  ONLY in this venv — the system `python` will `ModuleNotFound`. Windows.
+## Running things
+
+All dependencies are in `python/.venv` (Python 3.13, Windows); the system `python` lacks them.
 
 ```powershell
-# Train (defaults ARE the champion recipe: per-wheel + reward shaping +
-# LR/entropy decay, normal terrain; ~65 min):
+# Train (defaults are the champion recipe; ~65 min):
 python\.venv\Scripts\python.exe python\train.py --timesteps 8000000 --seed 1 --name my_run
 
-# Scan for collapse, then 200-ep confirm the FINAL (see gotcha 3):
+# Collapse scan, then a 200-ep confirm of the final:
 python\.venv\Scripts\python.exe python\diagnostics\rc_scan.py my_run --min-step 4000000 --episodes 60
 python\.venv\Scripts\python.exe python\diagnostics\rc_scan.py x --confirm python\checkpoints\my_run_final.zip --episodes 200 --seed 42
 
-# Batch eval / paired A/B:
+# Batch eval:
 python\.venv\Scripts\python.exe python\eval.py <ckpt.zip> --batch --episodes 200 --random-terrain --deterministic
 
-# Export to browser ONNX (no path arg = straight to web/ai_policy.onnx; then
-# hard-refresh the served page):
+# Export to web/ai_policy.onnx (then hard-refresh the page):
 python\.venv\Scripts\python.exe python\export_onnx.py <ckpt.zip>
 
-# Browser (ORT can't load over file://) — serve the web/ folder:
-python\.venv\Scripts\python.exe -m http.server 8765 --directory web   # open http://localhost:8765/
+# Browser (ORT can't load over file://):
+python\.venv\Scripts\python.exe -m http.server 8765 --directory web   # http://localhost:8765/
 
-# Tests (correctness, not the diagnostics/ probes) — see python/tests/README.md:
-python\.venv\Scripts\python.exe python\tests\test_vectorized_ground.py   # terrain parity
-python\.venv\Scripts\python.exe python\tests\test_saverestore.py         # save/restore fidelity
+# Tests (python/tests/README.md):
+python\.venv\Scripts\python.exe python\tests\test_vectorized_ground.py
+python\.venv\Scripts\python.exe python\tests\test_saverestore.py
+python\.venv\Scripts\python.exe python\tests\test_obs_parity.py
 ```
 
-## Model / observation / reward
+## Model, observation, reward
 
-- **Obs:** 12-dim per-wheel (the default): chassis angle, rear-grounded,
-  front-grounded, ang-vel, vx, vy, + 6 ground-clearance samples ahead (75 px
-  apart; count configurable via `--lookahead-n` / `HCR_LOOKAHEAD_N` — 13 = the
-  30 m human screen view, tested WORSE than 6). `VecFrameStack(4)` → **48-dim**
-  policy input. Net: MLP 256×256 (pi & vf).
-- **Action:** `Discrete(3)` — 0=forward, 1=reverse, 2=off. Motor is **on/off
-  only** (no throttle scaling — this is why SAC's continuous action was wasted).
-- **Reward:** forward progress `max(0, Δx_m)` + shaping (default on):
-  `+0.01/tick` survival and `-50` on death.
-- **Score** (the eval metric) = `(max_dist_px − spawn_x)/10`, **uncapped**.
-  (Canonical landmark/ceiling glossary: PROJECT_STATUS.md "Score landmarks & ceilings".)
-  **Completion = reaching the last solid vertex** (the launch lip): single-sourced as
-  `COMPLETE_PX = GROUND_DISTANCE − GROUND_SMOOTHNESS` = **19,185px = score ~1883** in
-  `constants.py` (browser: `distance − smoothness`); every completion check uses it
-  (fixed 2026-07-07 — older code used soft lines `−950`→1790 / `−350`→1850 that
-  under-counted; completion %s from before that are NOT comparable). **Beating the game =
-  reach the lip and fly off into the void** (you die when chassis `y*30 > 720`); the
-  projectile arc adds ~30–80px, so a real fly-off scores **~1900–1962** (measured;
-  `diagnostics/measure_track_end.py`). The env never declares victory — episodes end only
-  on death/truncation. `GROUND_DISTANCE=19200px`, `GROUND_SMOOTHNESS=15px`, `SCALE=30px/m`.
-  (See also memory `true-score-ceiling-flyoff`.)
-- Rearward samples exist but are off (`obs_spec.REAR_N=0`; tested, no benefit).
-  The browser reads rear_n + all obs constants from `web/policy_meta.json` now —
-  there's no hand-synced `PPO_REAR_N` in `ai_policy.js` anymore (Tier 1, CONVENTIONS.md #4).
+- **Obs:** 12-dim per wheel: chassis angle, rear-grounded, front-grounded, angular velocity, vx, vy, and 6 ground-clearance samples ahead, 75 px apart (`--lookahead-n` / `HCR_LOOKAHEAD_N`). `VecFrameStack(4)` makes a 48-dim input. MLP 256×256 for pi and vf.
+- **Action:** `Discrete(3)`: forward, reverse, off. The motor is on/off only.
+- **Reward:** `max(0, Δx_m)` per tick, plus shaping (on by default): +0.01 per tick survived, −50 on death.
+- **Score** (the eval metric) = `(max_dist_px − spawn_x)/10`, uncapped. **Completion** is reaching the last solid vertex, `COMPLETE_PX` in `constants.py` (browser: `distance − smoothness`). Beating the game is reaching that lip and flying off into the void. Episodes end only on death or truncation. The landmark scores are in PROJECT_STATUS *Score landmarks & ceilings*; never use them interchangeably.
+- Rear samples exist but are off (`obs_spec.REAR_N = 0`).
 
-## Terrain / difficulty knob
+## Terrain
 
-- `ground.randomize(difficulty=f)`, `f∈[0,1]`: `f=0` is **normal** (steepness
-  ramps 130→250 across the track — the real game distribution, byte-identical to
-  the old code). `f>0` raises the steepness FLOOR (`130+120f`) with the ceiling
-  pinned at 250 (reverse curriculum). **Eval always uses f=0.**
-- `is_too_steep()` rejects ~97% of raw maps and the generator **rerolls until it
-  passes** (matching the real game, `sketch.js:234`, ~33 rerolls avg) — the gate
-  is the *defining filter* of the real game's terrain distribution, not an
-  impassability measure. Fixed 2026-06-06 (the old 10-reroll cap leaked
-  too-steep maps ~73% of the time); a 1000-reroll safety cap remains for high
-  `difficulty`. Originals for diffing: `cb_reference/`.
+- `ground.randomize(difficulty=f)`, `f ∈ [0, 1]`. `f = 0` is the real game's distribution; `f > 0` raises the steepness floor. **Eval always uses `f = 0`.**
+- `is_too_steep()` rejects most raw maps and the generator rerolls until one passes, as the real game does (`sketch.js` in `cb_reference/`). The gate defines the distribution; it does not measure passability.
 
-## Conventions & gotchas (read before changing things)
+## Rules and gotchas
 
-**Coding conventions live in `CONVENTIONS.md`** (units, angles, Python↔JS
-constant sync, magic numbers, …) — read that before editing code. The gotchas
-below are project-specific traps.
+1. **Use the venv python.**
+2. **Per-wheel obs and reward shaping are on by default** in env, train and eval. Env-var overrides: `HCR_PER_WHEEL=0` and `HCR_REWARD_SHAPING=0` for legacy 11-dim checkpoints, `HCR_DIFFICULTY`, `HCR_DIFFICULTY_MAX`, `HCR_LOOKAHEAD_N`. **Never delete `python/archive/`** unless the user says so.
+3. **Default to the `_final` checkpoint.** The scan detects collapse; it does not pick a model, because the argmax of noisy 60-ep means is inflated. Snapshot-pick only if the final sits more than 150 below the plateau. Cite only 200-ep confirms. Cross-model claims need a paired A/B on identical tracks (PROJECT_STATUS *Model selection & eval protocol*).
+4. **Don't modify the physics** (torque, motor, friction); it breaks browser parity. Edit physics JS only in `web/`. The physics files must stay classic scripts, since V8 has no module loader or `window`; `web/game/` reaches them through the `window.HCR` bridge. Known divergences from `cb_reference/`: an asymmetric torso↔chassis joint limit in `web/Car.js` (the limits must sit inside the upright basin; PROJECT_STATUS 2026-07-07) and cosmetic syntax modernization. The Physics playground (`web/game/tune.js`) is browser-only and gated on "knob modified", so a stock browser sim stays bit-identical; training never loads it. `Box2d.js` polyfills `Object.defineProperty` with get/set only and ignores `value`.
+5. **ONNX export** uses `dynamo=False`, opset 11, for ONNX Runtime Web 1.18. No dynamo exporter, no threaded WASM.
+6. **Obs encoding is single-sourced** in `python/obs_spec.py`. `export_onnx.py` writes `web/policy_meta.json`, which `web/ai_policy.js` loads and validates fail-closed. `test_obs_parity.py` checks `ai_policy.js` `_buildObs` against `env.py` `_build_obs`.
+7. **Reboot before long sessions.** The machine leaks about 100 MB/h (unfixable; do not investigate) and long runs can hit `WinError 1450`.
+8. **Checkpoints regrow fast.** Keep `_final` and any cited snapshot. Prune only with the user's go-ahead: report keepers and prunable, wait, then verify keepers, dry-run, delete.
+9. **Before a long training run, restate the exact config** (steps, flags, seeds, direction) and get sign-off.
+10. **Same-seed envs do not see the same terrain.** `make_ground`'s reroll loop consumes the global `random` stream, so track identity depends on stream position. `eval.py --ab` is therefore unpaired at `f = 0`. To pair, pin tracks with `random.seed(k)` right before `make_ground(None)` and inject the Ground through an `env._make_ground` patch, as `diagnostics/jitter_probe.py` and `autorun/best_of_k.py` do.
+11. **Two repos. "Commit" means commit and push.** `web/` pushes to GitHub → Vercel. The root is local-only and tracks `python/` and docs; it ignores `web/`, checkpoints, tb, logs and result artifacts (`*.npz`, `backtrack_runs/`). Ignored results are not recoverable from git, so don't overwrite them. A change spanning both is one commit in each.
+12. **Check PROJECT_STATUS *TL;DR* before proposing an experiment.** Most ideas have been tested negative.
 
-1. **Use the venv python** (`python/.venv/Scripts/python.exe`).
-2. **Per-wheel obs + reward shaping are default-on everywhere** (env, train,
-   eval) since the 2026-06-06 CLI cleanup. Env-var overrides:
-   `HCR_PER_WHEEL=0` / `HCR_REWARD_SHAPING=0` (legacy 11-dim checkpoints),
-   `HCR_DIFFICULTY` (pin f), `HCR_DIFFICULTY_MAX`, `HCR_LOOKAHEAD_N`
-   (default 6; 13 for `vision13_a_*`). Old run commands map as:
-   `--per-wheel --reward-shaping --reverse-curriculum --rc-fmax-cap 0.0`
-   ≡ today's no-flag default; the retired curriculum + SAC trainers live in
-   `python/archive/` — **NEVER delete `python/archive/` unless the user
-   explicitly says so.**
-3. **Default to the `_final` checkpoint; the scan is a collapse detector, not
-   a picker.** The decay schedule keeps final ≈ plateau; the argmax of ~41
-   noisy 60-ep scan means is mostly luck (inflated ~+100). Snapshot-pick ONLY
-   if the scan shows final >150 below the plateau. Cite only 200-ep confirms;
-   cross-model claims need the paired A/B on identical tracks (different eval
-   protocols generate different track sets even at the same seed!). Full
-   protocol: PROJECT_STATUS "Model selection & eval protocol".
-4. **Don't modify the physics** (torque, motor on/off, friction) — it breaks
-   browser parity, and the locked physics is intentional. **The physics JS is
-   single-sourced in `web/`** (`web/{Car,Wheel,Person,Ground}.js` +
-   `web/libraries/Box2d.js`): both the deployed site AND the training path use it
-   (`js_backend.py` reads `web/…` directly — 2026-07-07 dedup; there is no root
-   copy anymore, so an edit can't land in only one place). Edit there.
-   **Exception (2026-07-07):** the driver's **torso↔chassis** revolute joint now
-   carries an ASYMMETRIC angular limit (`web/Car.js`): `lowerAngle=−70.6°`,
-   `upperAngle=+104.5°`. This stops a strong impact from flipping the driver into
-   the stable "hanging 180° below the car" pose (a distance joint fixes only
-   distance, not side; that flip → head-ground death you can't recover). The limit
-   MUST sit inside the upright basin of attraction or the ragdoll just rests
-   against the wall in the flip basin (what the first-cut ±90° did). The basin is
-   asymmetric because rest is tilted ~−19.7° (anchor offset forward): measured
-   flip edges are jointAngle −71.6° (torso tipping forward) / +105.5° (tipping
-   back); we take a **1° margin inside each**. The head↔torso (neck) joint has NO
-   limit — it doesn't exhibit the flip in practice. (See PROJECT_STATUS for the
-   basin measurement.) So the physics is
-   **no longer byte-identical to Code Bullet's original** (`cb_reference/` lacks
-   the limits). Impact on the AI is nil in practice — the driver is near-massless
-   and the limit only engages on rocket-mode-level impacts the policy never
-   produces (200-ep seed-42 parity confirm unchanged; see PROJECT_STATUS).
-   **Also (2026-07-17):** `web/{Car,Wheel,Person,Ground}.js` were syntax-modernized
-   (`var`→`const`/`let` etc., behavior-preserving) — another cosmetic divergence from
-   `cb_reference/`. Verified obs-bit-exact + deterministic eval unchanged (CONVENTIONS #10).
-   **Also (2026-09-29): browser-only Physics playground** (`web/game/tune.js`, Tools drawer):
-   ~45 knobs (gravity, densities, friction, motor, suspension, driver, sizes, rules, terrain).
-   Size knobs work via construction wrappers in `index.html`'s shim (Car accessors +
-   `Wheel`/`Person`/`Car` subclass rebinding) — the physics files are untouched and training
-   never loads the shim. Every hook is gated on "knob modified"; at stock the browser sim is
-   bit-identical to before (verified: terrain + 900-tick drive, 3 seeds). Note `Box2d.js`
-   polyfills `Object.defineProperty` (get/set only — it ignores `value`).
-5. **ONNX export:** `export_onnx.py` uses `dynamo=False`, opset 11 — required for
-   ONNX Runtime Web 1.18. Don't use the dynamo exporter or threaded WASM.
-6. **Obs encoding is single-sourced** in `python/obs_spec.py` → `export_onnx.py`
-   emits `web/policy_meta.json` → `web/ai_policy.js` loads + validates it fail-closed
-   (Tier 1, CONVENTIONS.md #4). So `ai_policy.js` no longer hardcodes `PPO_*` constants,
-   and re-exporting a model refreshes its meta automatically. `python/tests/test_obs_parity.py`
-   enforces that `ai_policy.js._buildObs` matches `env.py._build_obs`. (Deployed model
-   currently: per-wheel, rear=0, lookahead=6 → 48 stacked.)
-7. **Reboot before long sessions** — known machine-level memory leak, ~100 MB/h
-   (unfixable, do NOT investigate); long runs can hit `WinError 1450`.
-8. **Checkpoints regrow fast** (~81 per run). Keep only `_final` + any cited
-   snapshot. **Prune ONLY with the user's explicit go-ahead** — report keepers
-   vs prunable and wait; when approved: verify keepers, dry-run, delete.
-9. **Before long/expensive training runs, restate the exact config (steps,
-   flags, seeds, direction) and get sign-off** — a wrong-direction curriculum run
-   was wasted once. (See the user-memory `confirm-intent-before-training`.)
-10. **Same-seed envs do NOT see the same terrain across runs/instances.**
-   `make_ground`'s reroll loop and the grass picks consume the *global*
-   `random` stream, so track identity depends on stream position, not the env
-   seed (this silently invalidated the old cross-policy consensus analysis).
-   To compare policies/attempts on identical tracks, pin them the
-   `diagnostics/jitter_probe.py` way: `random.seed(k)` immediately before
-   `make_ground(None)`, then inject the Ground via an `env._make_ground` patch.
-   **Corollary (2026-06-08): `eval.py --ab` is therefore effectively UNPAIRED at
-   f=0** — env_a/env_b reroll off the global stream to different terrain despite
-   the same `--seed` (tell: `sd_diff ≈ √2×single-policy-sd ≈ 600`). Its mean test
-   is still valid (unpaired), but for TRUE pairing use the pinned-track inject
-   method (`python/autorun/best_of_k.py`, `fs8_ab.py`, `multilife_eval.py`).
-11. **In THIS repo, "commit" means "commit AND push".** The user is the sole
-   editor and this is low-stakes, so when they say commit, push to the remote in
-   the same step (don't wait for a separate "push"). Applies only to this project.
-   **Two repos:** `web/` (pushes to GitHub → Vercel) and the root (LOCAL-ONLY since
-   2026-07-07, no remote — tracks `python/` + docs; ignores `web/`, checkpoints, tb,
-   logs and result artifacts like `*.npz` / `backtrack_runs/` — see `.gitignore`). A
-   change spanning both = one commit in each; only `web/` gets pushed. Ignored result
-   files aren't recoverable from git, so don't overwrite them.
+## Current state
 
-## Current state (updated 2026-07-07)
+- **Deployed:** `python/checkpoints/seed2_resume_11611776_steps.zip` → `web/ai_policy.onnx`. It is a snapshot-pick, deployed at the user's instruction. To revert, re-export `python/checkpoints/base_a_8000000_steps.zip`.
+- **Browser:** Best-of-X with early stop (default X = 15), and **▶ Watch the AI beat this map**, which runs the save-scum backtracking search (`python/autorun/backtrack_search.py`) live on the current terrain and replays the result.
+- Results, the tested-negative list and open levers: PROJECT_STATUS *TL;DR*.
 
-- **Save-scum backtracking BEATS THE GAME on 30/30 tracks (2026-06-18)** — the one
-  test-time lever that broke the chaos ceiling. Go-Explore-style: on death, restore
-  a physics snapshot a little back, perturb the action stream, retry; rewind deeper
-  if the same wall persists; commit each cleared section; stitch. Reaching the true
-  finish (lip + fly-off, score ~1900–1962) it beats **96.7% (29/30) vs Best-of-30
-  66.7%** on identical pinned tracks (strictly dominant, +9 tracks, 0 losses); the
-  lone holdout fell to a bigger budget → **100% with patience** (no structural hard
-  core; the limit is budget/chaos, not skill). It FACTORIZES the per-section survival
-  product Best-of-X can't. NOTE: this is a CONSTRUCTED stitched replay, not a better
-  policy / legit single-shot number (BC-robustification would likely wash, cf. SIL).
-  Harness `python/autorun/backtrack_search.py` (the offline pose-stream export
-  `python/autorun/export_replay.py` still exists but the browser no longer ships
-  pre-exported replays — the deleted `replays/` folder). `web/index.html` now runs
-  the search **live in-browser** via one button: **▶ Watch the AI beat this map**
-  runs the Go-Explore search on the *current* terrain, then
-  ghost-replays the result (flies off the end if it can, else shows the best run
-  found). (This replaced the older pinned-track picker + `replays/` ghost-replay /
-  "Load & drive".) Memories `backtracking-save-scum-search`,
-  `true-score-ceiling-flyoff`.
-- **Deployed (2026-06-15):** `python/checkpoints/seed2_resume_11611776_steps.zip`
-  → `web/ai_policy.onnx` (same obs/arch as base_a: per-wheel, lookahead 6, rear 0,
-  48-dim; drop-in, `web/ai_policy.js` unchanged). A snapshot from the seed2 hold-low
-  resume; held-out 500-track paired **+68 vs base_a (1490 vs 1422, p=0.0065)**;
-  200-ep seed-42 confirm **1486.4** (vs base_a 1367.5 same protocol — but a
-  different track set, so cite the paired +68, not the +119).
-  **CAVEAT — this is a snapshot-pick (against gotcha #3):** its neighbors and the
-  run's own endpoint WASH vs base_a (12M +23 ns, resume_final +20 ns, 11.2M −51),
-  so the +68 may be a lucky local peak of the ±100 per-checkpoint eval wander, not
-  a better *model*. Deployed at the user's explicit instruction.
-  **Paired re-test 2026-06-16:** deployed vs base_a
-  on identical pinned tracks = **+52.6 mean (n.s., p≈0.13)**, completion TIED; a
-  +4M reset-high re-anneal from this lineage fell back to base_a's mean (−70 vs
-  deployed, p≈0.035). So the snapshot is a real-ish ~+60 mean-DISTANCE peak the
-  lineage can't re-reach, but completion is flat ~22-24% across base_a/deployed/
-  reanneal — the peak doesn't buy completions. **Revert:** re-export the prior
-  champion `python/checkpoints/base_a_8000000_steps.zip` (1367.5, 200-ep seed-42)
-  with `export_onnx.py` (the old `.onnx.bak` backups were deleted in the web/
-  reorg; older 1312 champion is `ppo_p5_combo_a_6400000`). Terrain gen
-  numpy-vectorized (bitwise-identical; parity
-  `tests/test_vectorized_ground.py`).
-- **The ~1350 ceiling is CHAOS, not missing skill** (`jitter_probe.py`):
-  0% early deaths; ±1px spawn jitter spreads the stop point by a median
-  ~10,000 px on the same track; 8 jittered attempts complete 67.5% of tracks
-  (vs 20% single-attempt, oracle mean ~1799 vs ~1850–1900 track-length cap).
-  The limit is per-section survival *probability* in the steep back third.
-- **What helped:** per-wheel obs (+~60); LR 3e-4→1e-4 + entropy 0.01→0.003
-  decay (+155, anti-degradation — keeps the final at peak).
-- **What didn't (all tested; numbers in PROJECT_STATUS):** reverse curriculum,
-  easy→normal curriculum + bottleneck-spawn, rear vision, extended forward
-  vision (13-sample/30 m: −127 vs matched control), retraining on the corrected
-  terrain distribution (wash), deeper/wider nets, no frame-stack, longer
-  episodes, 16M steps (pre-decay AND with stretched decay — reaches the SAME eval
-  ceiling as the 8M champion, +16±84 paired, completion down; the rising train
-  curve is cross-run-uninformative — WITHIN a run eval DOES track training
-  reward, r≈0.6–0.9, see PROJECT_STATUS "Train-vs-eval curves"), compressed-decay
-  runs <8M (4M −143, 2M −199 paired) and a constant-low resume (`--resume-hold-low`,
-  +4M: wash) — **~8M is a saturation knee**: less compute undershoots even with
-  matched decay, more saturates (compute-vs-decay study 2026-06-15),
-  SAC, γ=0.999 (significantly worse), self-imitation v1
-  (BC on lucky stochastic rollouts: wash, demo set self-contradictory),
-  cross-seed distillation (chaos artifact), risk-averse death penalty
-  (−300/−500 + 4000-tick episodes: −136/−164 paired, completion 24.5%→14/11.5%,
-  pace unchanged — on/off motor can't trade speed for survival),
-  **multi-life death-markers** (markers-only; lives=6 AND lives=3: lose to free
-  Best-of-X — adaptivity competes with chaos-reroll diversity; lives=3 helps
-  single-shot only), **RecurrentPPO/LSTM** (full 8M: −447 paired, decisive),
-  **frame-stack-8** (−112 paired: more temporal context hurts; 4 is the sweet
-  spot), **seed-search** (seeds 2/3 wash: champion is seed-robust), **stochastic
-  Best-of-X** (caps ~67% vs deterministic 70%). [autonomous run 2026-06-08;
-  details in python/autorun/RUNLOG.md]
-  **2026-06-16:** test-time **MPC/search** on the
-  frozen policy (the open "planning" lever — chaos defeats foresight at every
-  horizon; H=90 hurts 50%→17%), **targeted perturbation** at the death spot (wash
-  vs blind jitter), **robustness training** (`--spawn-jitter 1.0`: −148 paired
-  single-shot, p≈0.0004), and a **champion+robust ensemble** (no help at matched
-  budget; shared ~17% hard core).
-  **2026-06-19:** **in-episode "exploration nudge"** (`--nudge-prob`/`--nudge-mag`,
-  default-off, parity-safe) — occasional small recoverable chassis velocity kick
-  DURING training, grounded-gated, with the death penalty suppressed for ~1s after
-  (the "fair" version) so the policy must learn to continue from being knocked off
-  its line. Full 8M run at p0.01/mag0.5: **−93.5 paired vs base_a (t=−2.18,
-  p≈0.03), completion 21.5%→17.5%** — modestly HURT, same direction as spawn-jitter
-  (the in-episode analog). Mechanism: on/off motor can't trade against a
-  perturbation, and chaos means perturbed states never recur so there's no
-  learnable recovery — perturbation-during-training just dilutes the specialized
-  single-shot trajectory. Two independent perturbation-training negatives now;
-  a positive config is unlikely (see memory `perturbation-training-hurts`).
-- **Best-of-X is the deployed lever; the DEPLOYED model's ceiling is ~82.5%, not
-  70%** (the old "70% plateau / flat to K=16" was *base_a*). On 120 pinned tracks
-  (`best_of_k.py`, deployed `seed2_resume`): K=8→66.7, K=10→70.0, K=15→79.2,
-  K=20→81.7, **K=30→82.5%** — it keeps gaining past K=10. `web/index.html` now does
-  **early-stop on completion + default X=15** (raising X is free on solved maps).
-  Adaptive allocation reaches 82.5% at avg-10 attempts (`adaptive_bestofx.py`;
-  +12.5pp over uniform-10 = oracle) — the campaign lever.
-- **Live levers** (the human's 90%-in-5-adaptive gap, now vs the corrected ~82.5%
-  Best-of-X ceiling): (1) a TRUE multi-life episode with reward/credit ACROSS
-  lives — the ONLY untested policy lever (markers-only saturates; given the
-  2026-06-16 negatives, expectations low); (2) ~~planning/search/MPC~~ TESTED
-  NEGATIVE 2026-06-16 (chaos defeats foresight); (3) browser adaptive-X — SHIPPED
-  (early-stop + X=15); cross-track adaptive allocation analyzed
-  (`adaptive_bestofx.py`). The ~17% hard core is shared across policies (a
-  structural on/off-motor limit). Physics off-limits. Reusable infra:
-  `python/autorun/` (best_of_k, adaptive_bestofx, robust_ab), `archive/planner.py`
-  (retired MPC), `diagnostics/jitter_probe.py`, `tests/test_saverestore.py`.
-
-## Repo map (essentials)
+## Repo map
 
 ```
-web/                                         # the deployable static site (its own git
-  index.html                                 #   repo → Vercel). index.html = a thin shell:
-  game/                                      #   markup + p5/Box2d compat shim + physics
-    state,bridge,geom,modes,sim,             #   <script>s + a window.HCR bridge + one
-    render,cheats,search,input,main.js,      #   <script type=module src=game/main.js>.
-    scenery,hud,fx,records.js,tune.js,dev.js #   (2026-09 visual pass: scenery/hud/fx = canvas
-  style.css                                  #   art + HUD + effects; records = localStorage
-                                             #   best score / fastest finish per map + stored
-                                             #   record-map terrains for the Records menu.)
-  ai_policy.js, ai_policy.onnx               #   game/ = the app as ES modules (Tier 4 split
-  Car/Wheel/Person/Ground.js, Pics/          #   2026-07-07; dev.js = password-gated dev mode:
-  libraries/{Box2d,ort.min}.js + *.wasm      #   overlays, step/quick-save, model swap, map
-                                             #   JSON, bug probe — HOW_TO_PLAY §8; the hash
-                                             #   check is a curtain, not security). *** SINGLE SOURCE of the
-  vercel.json, README.md, HOW_TO_PLAY.md     #   physics JS (Box2d/Car/Wheel/Person/Ground) —
-                                             #   the training path reads these too; they MUST
-                                             #   stay classic (V8 has no modules/window), so
-                                             #   game/ reaches them via the window.HCR bridge. ***
-HOW_TO_PLAY.md                               # serve + play/race-the-AI instructions (+ Bug-probe panel)
-cb_reference/                                # pristine Code Bullet originals (for diffing; NOT loaded)
-legacy_neat/                                 # legacy NEAT-era game (kept, unused by AI):
-                                             #   index.html + sketch.js + Genome/Neat/Population/
-                                             #   Species/Node/Player/Connection*/World.js. index.html
-                                             #   loads the physics from ../web/ and p5 from ../libraries/
-analysis_artifacts/                          # one-off diagnostic outputs (trace/bugrun JSON, reward &
-                                             #   train-vs-eval PNGs, measure*.html, debug_images/) — not
-                                             #   load-bearing; safe to delete
-libraries/                                   # p5.{js,dom,sound}.js ONLY (legacy_neat game); the physics
-                                             #   Box2d.js now lives solely in web/libraries/
-PROJECT_STATUS.md                            # detailed handoff + experiment log
+web/                   deployable site (own repo). index.html = markup + p5/Box2D compat
+  game/*.js            shim + window.HCR bridge + game/main.js (ES modules: sim, render,
+                       search, records, tune = playground, dev = password-gated dev mode)
+  Car/Wheel/Person/Ground.js, libraries/Box2d.js   the only copy of the physics
+  ai_policy.js, ai_policy.onnx, policy_meta.json
 python/
-  train.py        # PPO entrypoint; champion recipe is the default (see --help:
-                  #   --lookahead-n --gamma --max-steps --lr-final --ent-final ...)
-  env.py          # HillClimbEnv (gym); obs build; per-episode difficulty sampling
-  js_backend.py   # JSPhysics: PyMiniRacer/V8 wrapper around the JS classes
-  ground.py       # terrain gen (numpy-vectorized; difficulty knob, is_too_steep gate)
-  p5_noise.py     # exact p5.js noise() port + bitwise-identical noise_array()
-  eval.py         # batch / watch / paired-A/B eval
-  export_onnx.py  # PPO .zip -> web/ai_policy.onnx (default; dynamo=False, opset 11)
-  harvest.py, finetune_sil.py, demos/   # SIL infra (v1 tested: no benefit)
-  constants.py    # SCALE, sizes, spawn, GROUND_* (physics params live in JS, not here)
-  play.py, renderer.py   # manual driving + pygame renderer
-  tests/          # real correctness tests: test_vectorized_ground.py (terrain
-                  #   parity), test_saverestore.py (save/restore fidelity) + README
-  diagnostics/    # rc_scan.py (scan/confirm), deathmap.py, jitter_probe.py,
-                  #   torque_probe.py (localize what torques the chassis),
-                  #   analyze_bugrun.py (read the browser Bug-probe JSON exports)
-  checkpoints/, tb/, logs/   # logs/ = training run stdout logs (nudge_a*, robust1px_a, _crash, ...)
-  archive/        # retired trainers (reverse curriculum, SAC) — NEVER delete
-                  #   unless the user explicitly says so (see archive/README.md)
+  train.py, env.py, js_backend.py, ground.py, p5_noise.py, obs_spec.py, constants.py
+  eval.py, export_onnx.py, play.py, renderer.py
+  tests/               correctness tests (terrain parity, save/restore, obs parity)
+  diagnostics/         rc_scan, deathmap, jitter_probe, torque_probe, analyze_bugrun, ...
+  autorun/             best_of_k, adaptive_bestofx, robust_ab, backtrack_search, ...
+  archive/             retired trainers (never delete)
+  checkpoints/, tb/, logs/
+cb_reference/          Code Bullet originals, for diffing only
+legacy_neat/           the old NEAT game; loads physics from ../web/, p5 from ../libraries/
+analysis_artifacts/    one-off diagnostic outputs; not load-bearing
+PROJECT_STATUS.md      results, experiment log, reasoning
+CONVENTIONS.md         coding conventions
+HOW_TO_PLAY.md         serving and playing the browser game
 ```
-(The `legacy_pybox2d/` pre-JS-physics port was deleted 2026-07-07 — it was the sole
-remaining consumer of pybox2d and the dead physics-tuning constants. In git history.)

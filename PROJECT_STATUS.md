@@ -34,6 +34,31 @@ re-measuring — do NOT compare old %s to numbers produced after 2026-07-07.
 
 ---
 
+## 2026-09-29 — Browser-only Physics playground
+
+`web/game/tune.js` (Tools drawer) exposes ~45 knobs: gravity, densities, friction, motor,
+suspension, driver, sizes, rules, terrain. Size knobs work via construction wrappers in
+`index.html`'s shim (Car accessors + `Wheel`/`Person`/`Car` subclass rebinding); the
+physics files are untouched and training never loads the shim. Every hook is gated on
+"knob modified", so at stock the browser sim is bit-identical to before (verified: terrain
++ 900-tick drive, 3 seeds). Trap found on the way: `Box2d.js` polyfills
+`Object.defineProperty` with get/set only — it ignores `value`.
+
+## 2026-07-17 — Physics classes syntax-modernized
+
+CONVENTIONS.md was written during the 2026-07-07 understandability refactor (Tiers 0–4),
+which split `web/game/` into ES modules and then modernized it with AST-based `lebab`
+(`var`→`const`/`let`, `this`-safe arrows, template literals) in a separate commit.
+On 2026-07-17 the physics classes `web/{Car,Wheel,Person,Ground}.js` got the same pass
+(plus no-op `this.field;` statements removed, `;;` cleaned, `Car.destroy` `&&`-guard → `?.`).
+A cleanup sweep followed: `ai_policy.js` (never lebab'd before), the sibling-loop `var`s
+lebab had left (safe: none captured in a closure), and the `obj-shorthand` / `obj-method`
+/ remaining `template` transforms. `node --check` passes on all 16 non-vendored files.
+Loose equality (`==`/`!=`) left as is: `x != null` is the null-and-undefined idiom.
+Verified each round: obs bit-exact (`max|py-js|=0`), `game/` import harness, deterministic
+eval unchanged (1495). `cb_reference/` now diverges cosmetically as well as behaviorally
+(the joint limit below).
+
 ## 2026-07-07 — Driver ragdoll joint limits (browser-play fix, AI wash)
 
 Fixed the long-standing "head flips 180° below the car on a very strong impact
@@ -243,16 +268,23 @@ oracle mean 1798.7 against a ~1885 track-length cap). The limit is per-section
 survival *probability* in the steep back third. Every config tried lands in
 1180–1432; see the experiment log.
 
-**Live levers** (target measured human-vs-AI gaps; everything else tested-dead):
-1. **Multi-life death-marker training** (RL²-lite): episodes = K lives on one
-   terrain, respawn on death, obs gains "previous deaths near lookahead"
-   markers, reward spans lives → trains the human adaptive-retry trick.
-   Ports to the browser (death locations known per map).
-2. **RecurrentPPO (LSTM)** — within-run memory beyond the 0.13 s frame stack
-   (e.g. hold a back-up-for-runway plan).
+**Test-time levers.** Best-of-X is the deployed single-policy lever: ~82.5% completion
+at K=30 on the deployed model (old soft line). Save-scum backtracking beats the game on
+30/30 pinned tracks, but it is a constructed stitched replay, not a better policy; it runs
+live in the browser (**▶ Watch the AI beat this map**).
 
-Prior calibration: most clever ideas on this project washed; these differ in
-targeting specifically measured gaps (see "Human benchmark").
+**Tested negative** (details in the log): reverse and easy→normal curricula,
+bottleneck-spawn, rear vision, 13-sample forward vision, retraining on the corrected
+terrain, deeper/wider nets, no frame-stack, frame-stack-8, longer episodes, 16M steps,
+compressed decay <8M, constant-low resume, SAC, γ=0.999, self-imitation, cross-seed
+distillation, risk-averse death penalty, multi-life death markers, RecurrentPPO/LSTM,
+seed search, stochastic Best-of-X, test-time MPC, targeted perturbation, spawn-jitter
+and in-episode-nudge robustness training, champion+robust ensemble. ~8M steps is a
+saturation knee.
+
+**Remaining untested policy lever:** a true multi-life episode with credit across lives
+(markers-only saturates; expectations low). The ~17% Best-of-X hard core is shared across
+policies. Physics is off-limits.
 
 ## How it works
 
@@ -631,6 +663,23 @@ Recommended follow-up if revisiting: the dense-sweep test, and/or re-confirm
 Tangent settled here too: the resume "dip" some curves show is NOT a bug — LR/ent
 constant (TB), Adam momentum restored, training reward flat; seed2 UNINTERRUPTED
 dips the same (4.8M 1310, 7.2M 1329 on 120 trk). It's the same eval wander.
+
+### Snapshot re-test, test-time search, robustness (2026-06-16) — all negative
+- **Deployed snapshot re-test:** seed2_resume 11.6M vs base_a on identical pinned tracks
+  = **+52.6 mean (n.s., p≈0.13)**, completion TIED (~22–24% across base_a / deployed /
+  re-anneal). A +4M reset-high re-anneal from this lineage fell back to base_a's mean
+  (−70 vs deployed, p≈0.035). The snapshot is a real-ish ~+60 mean-distance peak the
+  lineage can't re-reach, and it buys no completions.
+- **Best-of-X on the deployed model** (120 pinned tracks, `best_of_k.py`): K=8→66.7,
+  K=10→70.0, K=15→79.2, K=20→81.7, **K=30→82.5%** — it keeps gaining past K=10 (the old
+  "70% plateau, flat to K=16" was base_a). Browser now early-stops on completion with
+  default X=15. Adaptive allocation (`adaptive_bestofx.py`) reaches 82.5% at avg-10
+  attempts (+12.5pp over uniform-10 = oracle). All against the OLD soft line (see glossary).
+- **Test-time MPC/search** on the frozen policy: chaos defeats foresight at every
+  horizon; H=90 hurts 50%→17%. Planner retired to `archive/planner.py`.
+- **Targeted perturbation** at the death spot: wash vs blind jitter.
+- **Robustness training** (`--spawn-jitter 1.0`): −148 paired single-shot, p≈0.0004.
+- **Champion+robust ensemble:** no help at matched budget; a shared ~17% hard core.
 
 ### In-episode exploration nudge (2026-06-19) — negative
 Idea: bring the test-time save-scum perturbation INTO training — occasionally give
