@@ -73,9 +73,11 @@ def unwrap(text):
 
         match = LIST_RE.match(line)
         if match:
-            # CommonMark lets an ordered list interrupt a paragraph only at "1."
+            # CommonMark lets an ordered list interrupt a paragraph only at "1.", so
+            # "200." wrapped to a line start (or to an item's content indent) is prose
             ordered = match.group(2).endswith(".")
-            if ordered and buf and not prefix and match.group(2) != "1.":
+            nested = prefix != "> " and len(match.group(1)) >= len(prefix)
+            if ordered and buf and match.group(2) != "1." and (not prefix or nested):
                 buf.append(stripped)
                 continue
             flush()
