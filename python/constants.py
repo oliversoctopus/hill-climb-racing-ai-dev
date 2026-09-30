@@ -10,7 +10,7 @@ browser and training read directly. js_backend.py is the single source for those
 (The old pybox2d-tuned copies + the pybox2d port were removed 2026-07-07.)
 
 Convention: (x, y) with y growing downward, gravity (0, +10) — matches the JS game.
-Units: pixels for terrain/geometry; SCALE px per Box2D meter. See CONVENTIONS.md #1.
+Units: pixels for terrain/geometry; SCALE px per Box2D meter. See CONVENTIONS *Spatial units*.
 """
 
 SCALE = 30.0  # pixels per Box2D meter

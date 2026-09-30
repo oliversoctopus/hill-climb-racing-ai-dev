@@ -37,7 +37,7 @@ def _write_policy_meta(onnx_path: str, obs_width: int) -> None:
     """Write policy_meta.json next to the ONNX file — the obs encoding that the
     browser (web/ai_policy.js) loads and uses. Single-sourced from obs_spec; the
     checkpoint's actual lookahead is recovered from its obs width so lookahead-13
-    models export correctly. See CONVENTIONS.md #4."""
+    models export correctly."""
     n_stack = obs_spec.N_STACK
     if obs_width % n_stack != 0:
         raise SystemExit(f"[onnx] obs width {obs_width} not divisible by n_stack {n_stack}")

@@ -4,8 +4,8 @@ pinned tracks, plus each model's completion rate.
 Tracks are pinned the jitter_probe way (seed the global RNG right before
 make_ground, inject the Ground via env._make_ground) so BOTH models drive the
 exact same terrain from the exact same canonical spawn -- a TRUE paired test
-(unlike eval.py --ab at f=0, which rerolls to different terrain; see CLAUDE.md
-gotcha #10). Reports the paired mean difference with a t-stat.
+(unlike eval.py --ab at f=0: both of its envs reroll off the global random
+stream, so they drive different terrain). Reports the paired mean difference with a t-stat.
 
 Run: python autorun/robust_ab.py <ckpt_b.zip> [--ckpt-a <champion.zip>] [n_tracks=200]
   default ckpt_a = the deployed champion (seed2_resume_11611776_steps.zip).

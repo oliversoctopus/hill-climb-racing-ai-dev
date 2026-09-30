@@ -63,10 +63,10 @@ from constants import (  # noqa: E402
 )
 from ground import Ground, make_ground as _make_ground  # noqa: E402
 from js_backend import JSPhysics  # noqa: E402
-import obs_spec  # noqa: E402  (single source of the obs encoding; CONVENTIONS.md #4)
+import obs_spec  # noqa: E402  (single source of the obs encoding)
 
 # Obs topology + normalization constants are single-sourced in obs_spec.py
-# (CONVENTIONS.md #4); these module aliases keep existing references working.
+# These module aliases keep existing references working.
 # GROUND_LOOKAHEAD_N is the DEFAULT (per-env override via lookahead_n= /
 # HCR_LOOKAHEAD_N; 6 * skip 5 * 15px = 375px/12.5m ahead, 13 = 900px/30m = the
 # full human view). Rearward samples (GROUND_REAR_N) let the policy see behind
@@ -102,7 +102,7 @@ class EnvConfig:
     then HCR_* env vars OVERRIDE them (env wins — this is what lets SubprocVecEnv
     workers inherit config without pickling it through the process boundary). An
     override that actually changes a value is logged, so it isn't silent. Single
-    source of the env config surface (CONVENTIONS.md #5)."""
+    source of the env config surface."""
 
     per_wheel_obs: bool = obs_spec.PER_WHEEL
     reward_shaping: bool = True
@@ -182,7 +182,7 @@ class HillClimbEnv(gym.Env):
         super().__init__()
 
         # Resolve config: constructor kwargs, then HCR_* env vars override them
-        # (env wins; changes are logged). Single source: EnvConfig (CONVENTIONS.md #5).
+        # (env wins; changes are logged). Single source: EnvConfig.
         cfg = EnvConfig.resolve(
             per_wheel_obs=per_wheel_obs,
             reward_shaping=reward_shaping,
@@ -280,7 +280,7 @@ class HillClimbEnv(gym.Env):
     # RETIRED EXPERIMENT — reverse curriculum (tested, no benefit). These methods
     # + _sample_difficulty are kept functional only for the archived trainer
     # (archive/train_reverse_curriculum.py) and the rc_* diagnostics; the live
-    # training/eval path never raises f_max above 0. See CONVENTIONS.md #8.
+    # training/eval path never raises f_max above 0.
     def set_difficulty_max(self, f_max: float) -> None:
         """Set the reverse-curriculum ceiling f_max in [0, 1]. Called by the
         training callback each rollout (via VecEnv.env_method) to expand the

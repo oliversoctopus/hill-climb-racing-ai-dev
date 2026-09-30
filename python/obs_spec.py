@@ -8,9 +8,8 @@ bit-for-bit, or the model sees out-of-distribution input:
 To keep them in sync, the normalization constants and topology live HERE.
 `export_onnx.py` serializes this module to `web/policy_meta.json` next to the
 ONNX model; `web/ai_policy.js` loads that JSON and validates it fail-closed.
-See CONVENTIONS.md #4.
 
-Conventions: meters are the internal spatial unit (#1); angles are radians (#2).
+Conventions: meters are the internal spatial unit; angles are radians.
 """
 from __future__ import annotations
 

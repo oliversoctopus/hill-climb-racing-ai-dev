@@ -173,7 +173,7 @@ function _buildGroundBodies(world, vertices_px) {
     for (var i = 0; i < this.vectors.length; i++) {
       if (this.vectors[i].x >= x_m) {
         for (var j = 0; j < Math.min(skip * n, this.vectors.length - i); j += skip) {
-          out.push(this.vectors[i + j].y);  // meters (CONVENTIONS.md #1; matches Ground.js)
+          out.push(this.vectors[i + j].y);  // meters (matches Ground.js)
         }
         break;
       }

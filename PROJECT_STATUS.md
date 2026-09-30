@@ -6,7 +6,7 @@ Detailed handoff + experiment log. For day-to-day orientation see `CLAUDE.md`; f
 
 ## Score landmarks & ceilings (glossary)
 
-The docs use several distances/scores that are easy to conflate — the canonical key (CONVENTIONS.md #12). Score = `(max_dist_px − SPAWN_X)/10`, uncapped; `GROUND_DISTANCE`=19200px.
+The docs use several distances/scores that are easy to conflate — the canonical key (CONVENTIONS *Domain landmark constants*). Score = `(max_dist_px − SPAWN_X)/10`, uncapped; `GROUND_DISTANCE`=19200px.
 
 **Completion** = reaching the **last solid terrain vertex** (the launch lip / true end). Single-sourced as `COMPLETE_PX = GROUND_DISTANCE − GROUND_SMOOTHNESS` in `constants.py` (and `storedGround.distance − smoothness` in the browser). Every completion check uses it.
 
@@ -92,7 +92,7 @@ Log: `python/autorun/RUNLOG.md`. **No deployable improvement found — champion 
 - **RecurrentPPO/LSTM** (full 8M): −447 paired, p<1e-4 — decisively worse.
 - **Frame-stack-8**: −112 paired, p=.02 — more temporal context hurts (4 is best).
 - **Stochastic Best-of-X**: ~67% vs deterministic 70% — can't break the ceiling.
-- **Methodology**: confirmed `eval.py --ab` is ~unpaired at f=0 (gotcha #10 corollary); pinned-track inject is the true-paired method.
+- **Methodology**: confirmed `eval.py --ab` is ~unpaired at f=0 (both envs reroll off the global `random` stream); pinned-track inject is the true-paired method.
 - **Train-vs-eval curves** (follow-up): within-run, deterministic eval DOES track `ep_rew_mean` (r +0.59/+0.72/+0.90 for seed2/fs8/base16); the dissociation is cross-run/at-ceiling only. Full detail in the "16M / train-vs-eval" section below; plots `train_vs_eval_curves.png`, `train_vs_eval_base16.png`.
 - Remaining untested high-upside idea: a TRUE multi-life episode (credit across lives), vs the saturating markers-only design tested here.
 
@@ -101,7 +101,7 @@ Log: `python/autorun/RUNLOG.md`. **No deployable improvement found — champion 
 
 A Hill Climb Racing AI: PPO drives a 2-wheel car over procedural terrain, maximizing forward distance. Started as a Python port of Code Bullet's old NEAT-based JS game; we ended up running the **unmodified JS physics** inside V8 (PyMiniRacer) for both training and browser deployment, because `pybox2d 2.3.10`'s solver allowed 30–100 mm of wheel drift the original `Box2d.js 2.0/2.1` doesn't (see "Physics history"). Terrain is a bitwise-exact Python port of p5.js `noise()`, so the training distribution matches the actual game.
 
-**Deployed (2026-06-15): `seed2_resume_11611776_steps.zip`** → `web/ai_policy.onnx` (same obs/arch as base_a — drop-in). A snapshot from the seed2 hold-low resume; held-out 500-track paired **+68 vs base_a (1490 vs 1422, p=0.0065)**; 200-ep seed-42 confirm **1486.4** (median 1554, 0% early deaths; base_a was 1367.5 same protocol, but different tracks → cite the paired +68, not +119). Deployed at the user's explicit request. **CAVEAT (snapshot-pick, against gotcha #3):** the run's endpoint and neighbors WASH vs base_a (resume_final +20 ns, 12M +23 ns, 11.2M −51) — the +68 is likely a lucky peak of the ±100 per-checkpoint eval wander, not a better model. **Revert:** re-export `base_a_8000000_steps.zip` over `web/ai_policy.onnx` with `export_onnx.py`. See "Deploying a snapshot-pick" below.
+**Deployed (2026-06-15): `seed2_resume_11611776_steps.zip`** → `web/ai_policy.onnx` (same obs/arch as base_a — drop-in). A snapshot from the seed2 hold-low resume; held-out 500-track paired **+68 vs base_a (1490 vs 1422, p=0.0065)**; 200-ep seed-42 confirm **1486.4** (median 1554, 0% early deaths; base_a was 1367.5 same protocol, but different tracks → cite the paired +68, not +119). Deployed at the user's explicit request. **CAVEAT (snapshot-pick, against the default-to-`_final` rule):** the run's endpoint and neighbors WASH vs base_a (resume_final +20 ns, 12M +23 ns, 11.2M −51) — the +68 is likely a lucky peak of the ±100 per-checkpoint eval wander, not a better model. **Revert:** re-export `base_a_8000000_steps.zip` over `web/ai_policy.onnx` with `export_onnx.py`. See "Deploying a snapshot-pick" below.
 
 **Prior champion: `base_a_8000000_steps.zip`** (12-dim per-wheel obs + reward shaping + LR/entropy decay, 8M PPO steps, normal terrain) — **mean 1367.5** (200-ep det, seed 42; std 428, median 1422, 90th pct 1900, 0% early deaths); 1350.7 pre-fix. (The `.onnx.bak` deploy backups were deleted in the web/ reorg; re-export from the `.zip` checkpoints to revert. Older 1312 champion is `ppo_p5_combo_a_6400000`.)
 

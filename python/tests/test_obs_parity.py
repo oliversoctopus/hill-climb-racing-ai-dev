@@ -1,4 +1,4 @@
-"""Cross-runtime obs parity (CONVENTIONS.md #9): the observation vector is built
+"""Cross-runtime obs parity: the observation vector is built
 by two independent implementations that MUST compute the same thing —
   python/env.py       HillClimbEnv._build_obs   (training / eval)
   web/ai_policy.js    PpoOnnxAgent._buildObs     (browser)
