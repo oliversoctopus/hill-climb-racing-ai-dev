@@ -6,7 +6,7 @@ Rules and pointers for working in this repo. `PROJECT_STATUS.md` holds results, 
 
 A PPO policy drives a 2-wheeled car over procedurally generated hills, maximizing forward distance. It trains in Python (Stable-Baselines3) and runs in the browser via ONNX.
 
-The physics is Code Bullet's JS game (`Box2d.js`, `Wheel.js`, `Person.js`, `Car.js`) run inside V8 via PyMiniRacer, for training and deployment alike, which gives exact browser parity. Do not restore pybox2d: its solver drifts where `Box2d.js` does not (PROJECT_STATUS *Physics history*).
+The physics is Code Bullet's JS game (`Box2d.js`, `Wheel.js`, `Person.js`, `Car.js`) run inside V8 via PyMiniRacer, for training and deployment alike, so both run the same physics. They are not bit-identical: rounding differences make a browser run diverge in Python within seconds (PROJECT_STATUS *Human-run recorder*). Do not restore pybox2d: its solver drifts where `Box2d.js` does not (PROJECT_STATUS *Physics history*).
 
 ## Architecture
 
@@ -80,6 +80,7 @@ python\.venv\Scripts\python.exe python\tests\run.py
 
 - **Deployed:** `python/checkpoints/seed2_resume_11611776_steps.zip` → `web/ai_policy.onnx`. It is a snapshot-pick, deployed at the user's instruction. To revert, re-export `python/checkpoints/base_a_8000000_steps.zip`.
 - **Browser:** Best-of-X with early stop (default X = 15), and **▶ Watch the AI beat this map**, which runs the save-scum backtracking search (`python/autorun/backtrack_search.py`) live on the current terrain and replays the result.
+- **Human runs:** with dev mode unlocked, every human run is recorded to IndexedDB (per tick: raw chassis state, wheel contacts, action; plus the terrain) and downloaded with **💾 Save runs**; the Dev section lists them for deleting one by one. Runs that change the physics (any cheat but slow-mo and reverse controls, the playground, quick-load, frame-step) are dropped, as are abandons under 3 s. Build obs from the recorded state with `env._build_obs`; replaying the actions through `js_backend.py` drifts.
 - Results, the tested-negative list and open levers: PROJECT_STATUS *TL;DR*.
 
 ## Repo map
@@ -87,7 +88,8 @@ python\.venv\Scripts\python.exe python\tests\run.py
 ```
 web/                   deployable site (own repo). index.html = markup + p5/Box2D compat
   game/*.js            shim + window.HCR bridge + game/main.js (ES modules: sim, render,
-                       search, records, tune = playground, dev = password-gated dev mode)
+                       search, records, tune = playground, dev = password-gated dev mode,
+                       humanruns = dev-mode recorder of your own runs)
   Car/Wheel/Person/Ground.js, libraries/Box2d.js   the only copy of the physics
   ai_policy.js, ai_policy.onnx, policy_meta.json
 python/

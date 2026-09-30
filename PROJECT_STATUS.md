@@ -23,6 +23,25 @@ The docs use several distances/scores that are easy to conflate. This is the can
 
 ---
 
+## 2026-09-29 — Human-run recorder; browser and `js_backend.py` are not bit-identical
+
+`web/game/humanruns.js` (dev mode) records each clean human run: per tick, the chassis state (x, y, angle, angular velocity, vx, vy) and wheel contacts before the action, plus the action and the exact terrain. Physics-changing cheats, quick-load and frame-step drop a run; slow-mo does not. Verified: obs rebuilt with `env._build_obs` from a 5000-tick recording equal the deployed agent's in-browser obs on every tick (max diff 0).
+
+Replaying the recorded actions through `js_backend.py` does not reproduce the run. Two sources, measured on the same 5000-tick recording (max abs diff over x, y, angle and velocities, SI units):
+
+| tick | `js_backend.py` as is | ground edges in browser order |
+|---|---|---|
+| 1–10 | 0 | 0 |
+| 11 | 1.8e-15 | 1.8e-15 |
+| 30 | 0.79 | 1.7e-13 |
+| 300 | 78 | 1.1 |
+| 600 | 190 | 61 |
+
+- Edge order: `Ground.setBodies` creates every dirt edge, then every grass edge; `js_backend._buildGroundBodies` interleaves them per segment. Fixture order changes contact order, and the solver rounds differently.
+- A second difference, source not found, appears at tick 11 under both orders and grows chaotically.
+
+Both are rounding-level; the physics is the same, so policy performance should not move. What is lost is exact reproduction of a browser run in Python beyond a few seconds, so imitation data must come from the recorded state, not from a replay.
+
 ## 2026-09-29 — Browser-only Physics playground
 
 `web/game/tune.js` (Tools drawer) exposes ~45 knobs: gravity, densities, friction, motor, suspension, driver, sizes, rules, terrain. Size knobs work via construction wrappers in `index.html`'s shim (Car accessors + `Wheel`/`Person`/`Car` subclass rebinding); the physics files are untouched and training never loads the shim. Every hook is gated on "knob modified", so at stock the browser sim is bit-identical to before (verified: terrain
