@@ -23,6 +23,28 @@ The docs use several distances/scores that are easy to conflate. This is the can
 
 ---
 
+## 2026-09-30 — Browser stutters come from Chrome extensions
+
+Report: during human play the page freezes for 0.1–0.25 s every minute or so, on every machine and Chrome profile tried. **In an Incognito window (no extensions) the freezes went away** over 3 min of play. No code change.
+
+A DevTools Performance trace of the live site (107 s of human play, personal profile; `analysis_artifacts/Trace-20260930T193758.json.gz`) located each freeze:
+
+| time | on screen | cause |
+|---|---|---|
+| 103.2–103.4 s | ~14 dropped frames, ~220–250 ms | BlockSite extension (`eiimnmioipafcokbfikbljfdeojpcgbh`) injecting `content.js` into the page twice: 123 ms + 115 ms on the main thread, in an isolated world |
+| 89.6 s | ~107 ms | restart (R/T): 64 ms key handler + 42 ms first frame; harmless, a new map takes longer to react to |
+| 67.1–67.3 s | 2 late frames (34, 36 ms) | memory-reducing major GC (19 ms) then 5 ms CppGC (Blink heap) sweep tasks |
+
+Mitigation in `web/game/main.js`: a frame gap over 100 ms counts as a stall, and the loop resumes from where the screen froze instead of catching up. Before, it ran up to 100 ms of physics in one frame after a freeze (a visible lurch, and physics the player never saw); a side-by-side test with a faked 200 ms main-thread block felt much better without catch-up. Run times count ticks, so records are unaffected.
+
+What triggers BlockSite's re-injection is unknown. The page changes no title, URL or favicon; 0.2 s before it the browser flushed the back/forward cache for every tab, so the trigger is probably browser-wide.
+
+What the earlier in-page loggers showed, and why they missed it: per frame, each flagged hitch looked like one late frame (44–47 ms) and nothing worse. They time frames up to the hand-off to the browser and cannot see extension scripts or compositor drops, so they undercounted. Also ruled out in-page: saved data and dev mode (60 fps for 3 min with the user's data), live vs local code (identical apart from line endings), and resolution (2087×1173 and 1043×587 both gave ~2 late frames per minute).
+
+Open, optional: the CppGC sweeps are partly fed by canvas objects the render code creates every frame (sky and sun gradients, dirt pattern, `DOMMatrix`, depth gradient) and by per-tick DOM text writes. Caching them would shrink the small GC hitches; it does not touch the extension freezes.
+
+Method notes: a DevTools Performance trace is the tool here; per-frame `PipelineReporter` states give dropped frames, and `EvaluateScript` with `contextType: isolated` marks extension scripts. Chrome stops rAF in an occluded window, LoAF only reports frames ≥ 50 ms, and `await import('/game/state.js')` in the console returns the live `S`.
+
 ## 2026-09-29 — Human-run recorder; browser and `js_backend.py` are not bit-identical
 
 `web/game/humanruns.js` (dev mode) records each clean human run: per tick, the chassis state (x, y, angle, angular velocity, vx, vy) and wheel contacts before the action, plus the action and the exact terrain. Physics-changing cheats, quick-load and frame-step drop a run; slow-mo does not. Verified: obs rebuilt with `env._build_obs` from a 5000-tick recording equal the deployed agent's in-browser obs on every tick (max diff 0).
