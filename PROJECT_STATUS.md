@@ -37,6 +37,8 @@ A DevTools Performance trace of the live site (107 s of human play, personal pro
 
 Mitigation in `web/game/main.js`: a frame gap over 100 ms counts as a stall, and the loop resumes from where the screen froze instead of catching up. Before, it ran up to 100 ms of physics in one frame after a freeze (a visible lurch, and physics the player never saw); a side-by-side test with a faked 200 ms main-thread block felt much better without catch-up. Run times count ticks, so records are unaffected.
 
+Rejected: running the game in a Web Worker on an `OffscreenCanvas`. A test page confirmed the worker keeps drawing smoothly through a 200 ms main-thread block, but keyboard events only reach the main thread, so input pressed during the block arrives up to 200 ms late while the car keeps moving. In a side-by-side throttle-balancing test the user preferred the pause: more visible, but it never acts on stale input.
+
 What triggers BlockSite's re-injection is unknown. The page changes no title, URL or favicon; 0.2 s before it the browser flushed the back/forward cache for every tab, so the trigger is probably browser-wide.
 
 What the earlier in-page loggers showed, and why they missed it: per frame, each flagged hitch looked like one late frame (44–47 ms) and nothing worse. They time frames up to the hand-off to the browser and cannot see extension scripts or compositor drops, so they undercounted. Also ruled out in-page: saved data and dev mode (60 fps for 3 min with the user's data), live vs local code (identical apart from line endings), and resolution (2087×1173 and 1043×587 both gave ~2 late frames per minute).
