@@ -79,6 +79,7 @@ python\.venv\Scripts\python.exe python\tests\run.py
 
 - **Deployed:** `python/checkpoints/seed2_resume_11611776_steps.zip` → `web/ai_policy.onnx`. It is a snapshot-pick, deployed at the user's instruction. To revert, re-export `python/checkpoints/base_a_8000000_steps.zip`.
 - **Browser:** Best-of-X with early stop (default X = 15), and **▶ Watch the AI beat this map**, which runs the save-scum backtracking search (`python/autorun/backtrack_search.py`) live on the current terrain and replays the result.
+- **Records:** the per-map blob lives in localStorage and the terrains in IndexedDB (`hcr_records`); localStorage's quota is about 5 MB per site. Only notable or pinned maps are listed and kept; the rest expire 7 days after their last attempt. The rules are in `web/game/records_rules.js`; the reasoning is in the PROJECT_STATUS log.
 - **Human runs:** with dev mode unlocked, every human run is recorded to IndexedDB (per tick: raw chassis state, wheel contacts, action; plus the terrain) and downloaded with **💾 Save runs**; the Dev section lists them for deleting one by one. Runs that change the physics (any cheat but slow-mo and reverse controls, the playground, quick-load, frame-step) are dropped, as are abandons under 3 s. Build obs from the recorded state with `env._build_obs`; replaying the actions through `js_backend.py` drifts.
 - Results, the tested-negative list and open levers: PROJECT_STATUS *TL;DR*.
 

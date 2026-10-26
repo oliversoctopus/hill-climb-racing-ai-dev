@@ -23,6 +23,18 @@ The docs use several distances/scores that are easy to conflate. This is the can
 
 ---
 
+## 2026-10-25 — Record maps: storage quota, notability and expiry
+
+Report: after 332 record maps the game said "no record on this map" on every new map. Cause: every map with any score became a record map and stored its terrain in localStorage (about 14 KB each). localStorage held 5,242,837 of Chrome's 5,242,880 characters, and `_save` swallowed the quota error, so new records were silently dropped.
+
+Fix (`web/game/records.js`, rules in `web/game/records_rules.js`):
+
+- Terrains moved to IndexedDB (`hcr_records` → `terrains`); the small records blob stays in localStorage. Failed writes now show in the status line. The first load after the change backs up both old localStorage blobs to `hcr_records` → `backup` under `v1`.
+- Attempts are counted per map. A clean attempt lasts at least 3 s and scores at least 100; a cheated attempt lasts at least 3 s. Slow-mo-only runs are cheated attempts and are also counted on their own.
+- A map is kept for good (listed, given an id) when it is notable: a clean finish in the fastest quarter of all clean finish times, or a finish plus three runs of 1700+; for an unfinished map, 3 attempts with a best of 1500+, 4 with 1000+, 6 with 700+, or 10 at any score; holding an all-maps best; 3 cheated attempts, or the slow-mo ladder, or the incl.-cheats all-maps best (cheat notability, hidden with cheat records); or a 📌 pin. Notability is sticky. The finish-time pool keeps every map's clean best even after the map expires.
+- Other maps are unlisted ("Show all" reveals them) and expire 7 days after their last attempt, unless Saved or loaded.
+- Existing maps were judged once by `classifyLegacy`: the rules above with real clean attempt counts from the human-run recorder where it had runs (224 of 332 maps; it skips physics-cheat runs, so its counts can only undercount), a 1600+ best keeping unfinished maps without recorded runs, no fallback for slow finishes, and a running max over ids standing in for "an all-maps best when it was set". Dry run on the live data: 92 kept, 240 unlisted (142 of them slow finishes), which start their 7-day clock on the first load after deploy.
+
 ## 2026-09-30 — Browser stutters come from Chrome extensions
 
 Report: during human play the page freezes for 0.1–0.25 s every minute or so, on every machine and Chrome profile tried. **In an Incognito window (no extensions) the freezes went away** over 3 min of play. No code change.
