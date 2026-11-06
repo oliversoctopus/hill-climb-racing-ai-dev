@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "per_wheel": true,
+  "lookahead_n": 6,
+  "lookahead_skip": 5,
+  "rear_n": 0,
+  "rear_skip": 5,
+  "n_stack": 4,
+  "coyote_frames": 10,
+  "ang_vel_scale": 4.0,
+  "vx_scale": 17.0,
+  "vy_scale": 12.0,
+  "clearance_min_m": -3.0,
+  "clearance_max_m": 10.0,
+  "chassis_height_px": 40,
+  "n_obs": 12,
+  "input_width": 48
+}

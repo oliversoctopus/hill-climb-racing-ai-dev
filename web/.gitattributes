@@ -1,0 +1,14 @@
+# Normalize all text files to LF in the repo AND on checkout.
+# The working tree is already LF; this pins it so a checkout on a machine with
+# core.autocrlf=true can't flip files to CRLF (which produced the noisy
+# "LF will be replaced by CRLF" warnings and whole-file diffs).
+* text=auto eol=lf
+
+# Binary assets — never normalize.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.wasm binary
+*.onnx binary
+*.zip  binary

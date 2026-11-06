@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hill Climb AI</title>
+<meta name="description" content="Drive a physics hill-climb car yourself, race a trained AI, or watch it beat the game.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2315203a'/%3E%3Cpath d='M0 48 L18 30 L30 40 L44 22 L64 42 V64 H0Z' fill='%234caf50'/%3E%3Cpath d='M0 54 L18 36 L30 46 L44 28 L64 48 V64 H0Z' fill='%236a3913'/%3E%3Ccircle cx='48' cy='14' r='6' fill='%23ffb020'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#15203a"/><path d="M0 48 L18 30 L30 40 L44 22 L64 42 V64 H0Z" fill="#4caf50"/><path d="M0 54 L18 36 L30 46 L44 28 L64 48 V64 H0Z" fill="#6a3913"/><circle cx="48" cy="14" r="6" fill="#ffb020"/></svg>
+    <span class="brand-name">Hill Climb <em>AI</em></span>
+  </div>
+  <!-- The mode tabs drive the hidden #mode select, which stays the single source of the
+       current mode (Alt+1…5 and the search code read/write it). Order matches Alt+N. -->
+  <nav class="modes" id="mode_tabs" aria-label="Game mode">
+    <button data-mode="ai" title="Watch the AI drive (Alt+1)">AI drives</button>
+    <button data-mode="human" title="Drive it yourself (Alt+2)">You drive</button>
+    <button data-mode="vs" title="Race the AI on the same map (Alt+3)">You vs AI</button>
+    <button data-mode="hvh" title="Two players, split screen: WASD vs arrows (Alt+4)">2 players</button>
+    <button data-mode="bestofx" title="Run the AI X times and keep the best (Alt+5)">Best of X</button>
+    <button data-mode="aivai" class="dev-only" title="Dev: main AI vs AI B on the same map">AI vs AI</button>
+  </nav>
+  <select id="mode" aria-hidden="true" tabindex="-1">
+    <option value="ai">AI only</option>
+    <option value="human">Human only</option>
+    <option value="vs">Human vs AI</option>
+    <option value="hvh">Human vs Human (split)</option>
+    <option value="bestofx">Best of X (AI)</option>
+    <option value="aivai">AI vs AI (dev)</option>
+  </select>
+  <div class="topbar-right">
+    <button id="keybinds_btn" class="ghost" title="Keyboard shortcuts">⌨ Keys</button>
+    <button id="drawer_btn" class="ghost" title="Readouts, cheats and debug tools">🛠 Tools</button>
+  </div>
+</header>
+
+<main class="main">
+  <div class="stage-frame" id="stage_frame">
+    <canvas id="stage" width="1280" height="720" tabindex="0"></canvas>
+    <div id="toast" role="status"></div>
+    <label id="endcard_cheats" class="endcard-toggle" style="display:none;"
+           title="Also show records set with cheats (⚠ red = a cheated run set it)">
+      <input type="checkbox"> Show cheat records</label>
+  </div>
+
+  <div class="toolbar">
+    <div class="group">
+      <button id="reset_pos" title="Put the car(s) back at the start of this same map (R)">↺ Restart <kbd>R</kbd></button>
+      <button id="reset" title="Generate a brand-new random map (T)">🎲 New map <kbd>T</kbd></button>
+    </div>
+    <div class="sep"></div>
+    <label class="group label" title="Simulation speed (Shift+Scroll also steps this). Slow-mo runs aren't recorded.">Speed
+      <select id="speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="4">4×</option>
+        <option value="8">8×</option>
+      </select>
+    </label>
+    <div class="sep"></div>
+    <div class="group">
+      <span class="chip" title="The map you're on"><span class="lbl">Map</span><span id="current_terrain_box">—</span></span>
+      <button id="terrains_btn" class="ghost" title="Maps generated this session — click to re-load one">🗺 History</button>
+      <button id="saved_btn" class="ghost" title="Maps you've saved in this browser — save, load, or delete">💾 Saved</button>
+      <button id="records_btn" class="ghost" title="Every map you hold a record on — load one to beat it">🏆 Records</button>
+    </div>
+    <div class="group push-right">
+      <button id="pause" title="Pause / Resume (P)">Pause</button>
+      <button id="fullscreen_btn" class="primary" title="Fullscreen the game screen (Esc to exit)">⛶ Fullscreen</button>
+    </div>
+    <div class="group cta">
+      <button id="backtrack_run" class="primary" title="Run the rewind-and-retry search on THIS map, then replay it — it flies off the end if it can, otherwise it shows the best run it managed.">▶ Watch the AI beat this map</button>
+      <button id="backtrack_abort" class="danger" style="display:none;">Abort</button>
+      <details class="pop">
+        <summary title="Search settings">⚙</summary>
+        <div class="pop-body">
+          <label>Tick budget
+            <input id="backtrack_budget" type="number" value="120000" min="5000" step="10000" title="Max physics ticks before giving up (hard maps need more)">
+          </label>
+          The search gives up after this many physics ticks. Raise it if the AI keeps
+          running out on a hard map.
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div id="bestofx_panel" style="display:none;">
+    <div class="row">
+      <label class="label">Max attempts (X)
+        <input id="bestofx_n" type="number" value="15" min="1" max="200" title="Stops early once a map is solved (an attempt reaches the finish). More attempts solve more maps, with diminishing returns."></label>
+      <button id="bestofx_run" class="primary">Run</button>
+      <button id="bestofx_abort" class="danger" style="display:none;">Abort</button>
+      <span id="bestofx_status"></span>
+      <span id="bestofx_results" style="display:none;">
+        <label class="label">Pick run
+          <select id="bestofx_select"></select>
+        </label>
+        <button id="bestofx_watch">Watch</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="subbar">
+    <span id="status">Loading model + physics…</span>
+    <span id="backtrack_replaying" class="pill" style="display:none;">● Replaying run</span>
+    <span id="backtrack_status"></span>
+  </div>
+
+  <section class="records" aria-label="Your records">
+    <button class="records-title" id="records_title_btn" title="Open the Records menu">Your records<small>human runs, no cheats · view all ›</small></button>
+    <div class="rec" id="rec_map_score"><div class="rec-val">—</div><div class="rec-sub">best score · this map</div>
+      <button id="rec_pin" class="rec-pin" title="Pin this map: keep it in Records for good, without saving it">📌</button></div>
+    <div class="rec time" id="rec_map_time"><div class="rec-val">—</div><div class="rec-sub">fastest finish · this map</div></div>
+    <div class="rec" id="rec_all_score"><div class="rec-val">—</div><div class="rec-sub">best score · all maps</div></div>
+    <div class="rec time" id="rec_all_time"><div class="rec-val">—</div><div class="rec-sub">fastest finish · all maps</div></div>
+  </section>
+
+  <div class="hint">
+    <span><kbd>→</kbd><kbd>↑</kbd> or <kbd>D</kbd><kbd>W</kbd> gas</span>
+    <span><kbd>←</kbd><kbd>↓</kbd> or <kbd>A</kbd><kbd>S</kbd> reverse</span>
+    <span>2 players: <kbd>WASD</kbd> left · <kbd>Arrows</kbd> right</span>
+    <span>Reach the <b>checkered flag</b> to beat the map</span>
+  </div>
+</main>
+
+<!-- Tools drawer: readouts, cheats, status messages, debug. Every control keeps its
+     keyboard shortcut, so it works with the drawer closed too. -->
+<aside id="drawer" class="drawer" aria-label="Tools">
+  <div class="drawer-head">
+    <h2>🛠 Tools</h2>
+    <button id="drawer_close" class="ghost" title="Close (Esc)">✕</button>
+  </div>
+
+  <h3>Readouts</h3>
+  <label class="toggle" title="Height above the fall-off line, in metres"><input type="checkbox" id="bp_altimeter"><span class="sw"></span>Altimeter<kbd>H</kbd></label>
+  <label class="toggle" title="Whole-vehicle speed in m/s"><input type="checkbox" id="bp_speed"><span class="sw"></span>Velocity<kbd>V</kbd></label>
+  <label class="toggle" title="Your current-position score (drops if you roll back)"><input type="checkbox" id="bp_distance"><span class="sw"></span>Current distance<kbd>C</kbd></label>
+
+  <h3>Cheats</h3>
+  <label class="toggle" title="Head hits / falling off / AI timeout won't kill"><input type="checkbox" id="bp_invince"><span class="sw"></span>Invincible<kbd>I</kbd></label>
+  <label class="toggle" title="Gravity off — everything keeps its velocity"><input type="checkbox" id="bp_zerog"><span class="sw"></span>Zero-G<kbd>Z</kbd></label>
+  <label class="toggle" title="WASD/arrows fly at constant speed; scroll = speed"><input type="checkbox" id="bp_flight"><span class="sw"></span>Flight<kbd>G</kbd></label>
+  <label class="toggle" title="WASD/arrows thrust like a rocket; scroll = thrust"><input type="checkbox" id="bp_rocket"><span class="sw"></span>Rocket<kbd>J</kbd></label>
+  <label class="toggle" title="Mirror every movement key (a handicap — still counts for records)"><input type="checkbox" id="bp_reverse"><span class="sw"></span>Reverse controls<kbd>K</kbd></label>
+  <div class="btn-grid" style="margin-top:8px;">
+    <button id="bp_float" title="Lift every car ~300px, keeping velocity (F)">Float <kbd>F</kbd></button>
+    <button id="bp_stop" title="Zero all velocity on every car (X)">Stop <kbd>X</kbd></button>
+    <button id="bp_underworld" title="Drop every car to 1.5 m above the fall-off line (U)">Underworld <kbd>U</kbd></button>
+    <button id="bp_openexit" title="Toggle the underworld's right wall (E)"><span class="btn-label">Open Exit</span> <kbd>E</kbd></button>
+    <button id="bp_teleport" title="Teleport the car(s): X = score, Y = altitude">Teleport…</button>
+  </div>
+  <p class="note">Any cheat (and slow-mo below 1×) makes that run count toward cheat records only. Reverse controls still counts.</p>
+
+  <h3>Messages</h3>
+  <span id="bp_status"></span>
+
+  <details id="advanced_panel">
+    <summary>🧪 Physics playground</summary>
+    <div class="tune-presets">
+      <span class="dbg-lbl">Presets (they stack):</span>
+      <div id="tune_presets" class="tune-preset-btns"></div>
+      <button id="tune_resetall" class="danger">Reset all</button>
+    </div>
+    <div id="tune_root"></div>
+    <p class="note">Changes affect every car, the AI included (it was trained on stock physics, so expect chaos). Any change makes the run count toward cheat records only. Double-click a knob's name to reset it.</p>
+  </details>
+
+  <!-- Dev mode (game/dev.js): hidden until unlocked with the password. -->
+  <section id="dev_section" class="dev-only">
+    <div class="dev-head"><h3>🔧 Dev mode</h3><button id="dev_lock" class="ghost" title="Hide the dev tools again">Lock</button></div>
+    <label class="toggle" title="Draw the AI's look-ahead probes, wheel-contact flags and action probabilities"><input type="checkbox" id="dev_vision"><span class="sw"></span>AI vision</label>
+    <label class="toggle" title="Draw Box2D shapes, joints, contact points and velocities"><input type="checkbox" id="dev_b2d"><span class="sw"></span>Box2D debug draw</label>
+    <div class="dbg">
+      Time (<kbd>.</kbd> step · <kbd>Q</kbd> save · <kbd>L</kbd> load):<br>
+      <button id="dev_step" title="Pause and advance exactly one physics tick (.)">⏭ Step tick</button>
+      <button id="dev_qsave" title="Save the whole sim state (Q)">💾 Quick-save</button>
+      <button id="dev_qload" title="Restore the quick-save (L) — the run then counts as cheated">⤺ Quick-load</button>
+    </div>
+    <div class="dbg">
+      Models — main: <b id="dev_model_a">deployed</b> · AI B: <b id="dev_model_b">deployed</b><br>
+      <button id="dev_load_a" title="Pick an .onnx and its policy_meta.json">Load main AI…</button>
+      <button id="dev_load_b" title="Pick an .onnx and its policy_meta.json">Load AI B…</button>
+      <button id="dev_models_reset">Both → deployed</button>
+      <input type="file" id="dev_model_file" accept=".onnx,.json" multiple hidden>
+    </div>
+    <div class="dbg">
+      Map JSON (loads in the Python harness: <code>--map-json</code>):<br>
+      <button id="dev_map_copy">Copy</button>
+      <button id="dev_map_dl">Download</button>
+      <button id="dev_map_paste">Paste</button>
+      <button id="dev_map_open">Open file…</button>
+      <input type="file" id="dev_map_file" accept=".json" hidden>
+    </div>
+    <div class="dbg">
+      Spin-investigation presets:<br>
+      <button id="bp_unmask" class="danger" title="No damping + stiff under-damped suspension: exposes the suspension-resonance spin">🔥 Unmask</button>
+      <button id="bp_motorspin" class="danger" title="Motor speed ×2: reproduces the sustained CCW spin">🌀 Motor-spin</button>
+    </div>
+    <div class="dbg">
+      Human runs (every clean run you drive while dev mode is on):<br>
+      <button id="hr_download" title="Download every stored run: per-tick actions + the terrain">💾 Save runs</button>
+      <button id="hr_clear" class="danger" title="Delete every stored run from this browser">Clear all</button><br>
+      <span id="hr_count"></span>
+      <div id="hr_list"></div>
+    </div>
+    <div class="dbg">
+      Bug probe <span>(use <b>You drive</b>)</span>:<br>
+      <button id="bp_flag" title="Mark this moment in the recording so it is easy to find later" style="background:#a63;">⚑ Flag unusual</button>
+      <button id="bp_download">Download recording</button><br>
+      <span id="bp_live"></span>
+    </div>
+  </section>
+  <button id="dev_unlock_btn" class="dev-unlock" title="Developer tools (password)">🔒 Dev</button>
+</aside>
+
+<div id="dev_panel" class="hcr-modal">
+  <div class="modal-title">🔒 Dev mode</div>
+  <form id="dev_form" class="dev-form" autocomplete="off">
+    <input id="dev_pw" type="password" placeholder="Password" aria-label="Dev password">
+    <button type="submit" class="primary">Unlock</button>
+  </form>
+  <div id="dev_err" class="modal-note"></div>
+  <div class="modal-footer"><button id="dev_close">Cancel (Esc)</button></div>
+</div>
+
+<div id="keybinds_panel" class="hcr-modal" style="display:none;">
+  <div class="modal-title">⌨ Keyboard shortcuts</div>
+  <table class="keys">
+    <tr class="sec"><td colspan="2">Driving</td></tr>
+    <tr><td><kbd>→</kbd> <kbd>↑</kbd> / <kbd>D</kbd> <kbd>W</kbd></td><td>Gas (forward)</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>↓</kbd> / <kbd>A</kbd> <kbd>S</kbd></td><td>Reverse — either set works in single-player</td></tr>
+    <tr><td><kbd>WASD</kbd> / <kbd>Arrows</kbd></td><td>2 players: left player / right player</td></tr>
+    <tr class="sec"><td colspan="2">Game</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Restart (same map)</td></tr>
+    <tr><td><kbd>T</kbd></td><td>New map</td></tr>
+    <tr><td><kbd>P</kbd></td><td>Pause / Resume</td></tr>
+    <tr><td><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>5</kbd></td><td>Mode: AI drives · You drive · You vs AI · 2 players · Best of X</td></tr>
+    <tr><td><kbd>Shift</kbd>+Scroll</td><td>Sim speed (0.25×–8×, scroll up = faster)</td></tr>
+    <tr class="sec"><td colspan="2">Readouts</td></tr>
+    <tr><td><kbd>H</kbd></td><td>Altimeter</td></tr>
+    <tr><td><kbd>V</kbd></td><td>Velocity</td></tr>
+    <tr><td><kbd>C</kbd></td><td>Current distance (under your score)</td></tr>
+    <tr class="sec"><td colspan="2">Cheats (runs using them aren't recorded)</td></tr>
+    <tr><td><kbd>I</kbd></td><td>Invincible</td></tr>
+    <tr><td><kbd>Z</kbd></td><td>Zero-G</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Float car up</td></tr>
+    <tr><td><kbd>U</kbd></td><td>Underworld (drop to 1.5 m above the fall-off line)</td></tr>
+    <tr><td><kbd>X</kbd></td><td>Stop (zero all velocity)</td></tr>
+    <tr><td><kbd>E</kbd></td><td>Open / close the underworld exit</td></tr>
+    <tr><td><kbd>G</kbd></td><td>Flight: ↑/W fwd, ↓/S back, ←/A &amp; →/D rotate; scroll = speed</td></tr>
+    <tr><td><kbd>J</kbd></td><td>Rocket: ↑/W &amp; ↓/S thrust, ←/A &amp; →/D rotate; scroll = thrust</td></tr>
+    <tr><td><kbd>K</kbd></td><td>Reverse controls (mirrors every movement key)</td></tr>
+    <tr class="sec dev-only"><td colspan="2">Dev mode</td></tr>
+    <tr class="dev-only"><td><kbd>.</kbd></td><td>Pause + step one physics tick (hold to repeat)</td></tr>
+    <tr class="dev-only"><td><kbd>Q</kbd> / <kbd>L</kbd></td><td>Quick-save / quick-load the sim state</td></tr>
+  </table>
+  <div class="modal-footer"><button id="keybinds_close">Close (Esc)</button></div>
+</div>
+<div id="terrains_panel" class="hcr-modal">
+  <div class="modal-title">🗺 Map history</div>
+  <div class="modal-note">Maps generated this session, newest first. They're cleared when you close
+    the page — use <b>Saved → Save current map</b> to keep one.</div>
+  <div id="terrains_list" class="menu-list"></div>
+  <div class="modal-footer"><button id="terrains_close">Close (Esc)</button></div>
+</div>
+<div id="saved_panel" class="hcr-modal">
+  <div class="modal-title">💾 Saved maps</div>
+  <div style="text-align:center; margin-bottom:10px;">
+    <button id="save_current_btn" class="primary">＋ Save current map</button>
+  </div>
+  <div id="saved_list" class="menu-list"></div>
+  <div class="modal-footer"><button id="saved_close">Close (Esc)</button></div>
+</div>
+<div id="records_panel" class="hcr-modal">
+  <div class="modal-title">🏆 Record maps</div>
+  <div class="modal-note">Maps worth keeping: a fastest-quarter finish, a map you keep retrying, an all-maps best,
+    or one you <b>📌 pin</b>. Every other map you play stays unlisted for 7 days after your last attempt.
+    Saved maps show their Saved name. <b>Load</b> a map to try to beat your record on it.</div>
+  <div id="records_summary" class="rec-summary"></div>
+  <div class="rec-sortbar">
+    <span class="label">Sort by</span>
+    <div class="seg" id="records_sort">
+      <button data-sort="id" title="The order you first set a record on each map">Order set</button>
+      <button data-sort="score" title="Highest best score (distance) first">Best score</button>
+      <button data-sort="time" title="Fastest finish first; maps you haven't finished go last">Best time</button>
+    </div>
+    <label class="rec-cheat-toggle" title="Also show records set with cheats (⚠ red = a cheated run set it)">
+      <input type="checkbox" id="records_show_cheats"> Show cheat records</label>
+    <label class="rec-all-toggle" title="Also show unlisted maps, which expire 7 days after your last attempt">
+      <input type="checkbox" id="records_show_all"> Show all</label>
+  </div>
+  <div id="records_list" class="menu-list"></div>
+  <div class="modal-footer"><button id="records_close">Close (Esc)</button></div>
+</div>
+<div id="teleport_panel" class="hcr-modal">
+  <div class="modal-title">✈ Teleport</div>
+  <div class="teleport-row"><label for="teleport_x">X — score</label><input id="teleport_x" type="number" step="10"></div>
+  <div class="teleport-row"><label for="teleport_y">Y — altitude (m)</label><input id="teleport_y" type="number" step="1"></div>
+  <div class="modal-note" style="text-align:left; max-width:320px;">
+    X is the <b>score</b> (distance); Y is <b>altitude</b> in metres above the fall-off line (the
+    Altimeter reading). Velocity is preserved — turn on Invincible if you land somewhere risky.</div>
+  <div class="modal-footer">
+    <button id="teleport_go" class="primary">Teleport</button>
+    <button id="teleport_close">Cancel (Esc)</button>
+  </div>
+</div>
+
+<!-- ONNX Runtime Web first (local copy — avoid CDN race / global conflicts) -->
+<script src="libraries/ort.min.js"></script>
+<!-- Box2D.js (Emscripten port of Box2D 2.0/2.1 C++) -->
+<script src="libraries/Box2d.js"></script>
+
+<script>
+// ----------------------------------------------------------------
+// Tiny p5 polyfills — only what Ground.js / Wheel.js / Car.js / Person.js
+// actually call (random, noise, abs, floor, min, max, map, constrain).
+// Real p5.js was the source of an "undefined" error here. These suffice.
+// ----------------------------------------------------------------
+// p5 math constants (Car.js uses `motorSpeed * PI`)
+var PI = Math.PI;
+var TWO_PI = 2 * Math.PI;
+var HALF_PI = Math.PI / 2;
+var QUARTER_PI = Math.PI / 4;
+
+// Direct JS port of p5.js's noise() — exact match for python/p5_noise.py
+// and the noise the current model (ai_policy.onnx = ppo_p5_combo_a) trained on.
+// 4-octave value-noise with cosine-smoothstep fade and a 4096-entry random
+// lookup table. Permutation table is freshly seeded per terrain reset
+// (_perlinSeed), so consecutive "Reset" clicks give different maps.
+function _mulberry32(seed) {
+  var t = seed >>> 0;
+  return function() {
+    t = (t + 0x6D2B79F5) >>> 0;
+    var r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+var P5N_YWRAPB        = 4;
+var P5N_YWRAP         = 1 << P5N_YWRAPB;   // 16
+var P5N_ZWRAPB        = 8;
+var P5N_ZWRAP         = 1 << P5N_ZWRAPB;   // 256
+var P5N_SIZE          = 4095;
+var P5N_OCTAVES       = 4;
+var P5N_AMP_FALLOFF   = 0.5;
+var _p5PerlinArr = null;
+
+function _p5ScaledCosine(t) {
+  return 0.5 * (1.0 - Math.cos(t * Math.PI));
+}
+
+function _perlinSeed(seed) {
+  // p5 fills the table with Math.random() — we use a seeded mulberry32 so
+  // reset gives reproducible terrains and the character matches python/p5_noise.py.
+  var rng = _mulberry32(seed | 0);
+  _p5PerlinArr = new Float32Array(P5N_SIZE + 1);
+  for (var i = 0; i <= P5N_SIZE; i++) _p5PerlinArr[i] = rng();
+}
+
+function noise(x, y, z) {
+  if (_p5PerlinArr === null) _perlinSeed(Math.floor(Math.random() * 0x7FFFFFFF));
+  y = y || 0; z = z || 0;
+  if (x < 0) x = -x;
+  if (y < 0) y = -y;
+  if (z < 0) z = -z;
+
+  var xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  var xf = x - xi, yf = y - yi, zf = z - zi;
+  var rxf, ryf;
+  var r = 0;
+  var ampl = 0.5;
+  var n1, n2, n3;
+
+  for (var o = 0; o < P5N_OCTAVES; o++) {
+    var of = xi + (yi << P5N_YWRAPB) + (zi << P5N_ZWRAPB);
+    rxf = _p5ScaledCosine(xf);
+    ryf = _p5ScaledCosine(yf);
+
+    n1 = _p5PerlinArr[of & P5N_SIZE];
+    n1 += rxf * (_p5PerlinArr[(of + 1) & P5N_SIZE] - n1);
+    n2 = _p5PerlinArr[(of + P5N_YWRAP) & P5N_SIZE];
+    n2 += rxf * (_p5PerlinArr[(of + P5N_YWRAP + 1) & P5N_SIZE] - n2);
+    n1 += ryf * (n2 - n1);
+
+    of += P5N_ZWRAP;
+    n2 = _p5PerlinArr[of & P5N_SIZE];
+    n2 += rxf * (_p5PerlinArr[(of + 1) & P5N_SIZE] - n2);
+    n3 = _p5PerlinArr[(of + P5N_YWRAP) & P5N_SIZE];
+    n3 += rxf * (_p5PerlinArr[(of + P5N_YWRAP + 1) & P5N_SIZE] - n3);
+    n2 += ryf * (n3 - n2);
+
+    n1 += _p5ScaledCosine(zf) * (n2 - n1);
+
+    r += n1 * ampl;
+    ampl *= P5N_AMP_FALLOFF;
+    xi <<= 1; xf *= 2;
+    yi <<= 1; yf *= 2;
+    zi <<= 1; zf *= 2;
+    if (xf >= 1.0) { xi++; xf--; }
+    if (yf >= 1.0) { yi++; yf--; }
+    if (zf >= 1.0) { zi++; zf--; }
+  }
+  return r;
+}
+function random(a, b) {
+  if (a === undefined) return Math.random();
+  if (b === undefined) return Math.random() * a;
+  return a + Math.random() * (b - a);
+}
+function abs(x) { return Math.abs(x); }
+function floor(x) { return Math.floor(x); }
+function min(a, b) { return Math.min(a, b); }
+function max(a, b) { return Math.max(a, b); }
+function map(v, a, b, c, d) { return c + (d - c) * ((v - a) / (b - a)); }
+function constrain(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+// ----------------------------------------------------------------
+// Globals + polyfills that the game classes (Car/Wheel/Person/Ground)
+// reference. We're loading the EXACT JS files the browser game uses,
+// unmodified, so we have to make these names exist.
+// ----------------------------------------------------------------
+var SCALE = 30;
+var SPAWN_X = 350;
+var CANVAS_WIDTH = 1280, CANVAS_HEIGHT = 720;
+var canvas = { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+
+// --- p5 / physics-class compat shims ---
+// grassSprites, spawningY and difficulty ARE read by Ground.js during terrain gen
+// here. panX/panY/nextPanX/humanPlaying/fightMode/humanPlayer/reset exist only for
+// the physics classes' p5 show()/update() methods, which THIS site never calls
+// (they're used by legacy_neat/) — kept so those methods resolve.
+var panX = 0, panY = 0, nextPanX = 0;
+var humanPlaying = true;        // disables Car.update()'s no-progress death
+var fightMode = false;
+var humanPlayer = null;
+var reset = false;
+var difficulty = 50;
+var grassSprites = { length: 5 };   // Ground.js only reads .length
+var spawningY = 0;                  // Ground.randomizeGround() writes this
+
+var WHEEL_CATEGORY = 0x1, CHASSIS_CATEGORY = 0x2;
+var GRASS_CATEGORY = 0x4, DIRT_CATEGORY = 0x8;
+var PERSON_CATEGORY = 0x10;
+var WHEEL_MASK = GRASS_CATEGORY;
+var CHASSIS_MASK = DIRT_CATEGORY;
+var GRASS_MASK = WHEEL_CATEGORY | PERSON_CATEGORY;
+var DIRT_MASK = CHASSIS_CATEGORY;
+var PERSON_MASK = GRASS_CATEGORY;
+
+// Box2D shorthands
+var Vec2 = Box2D.Common.Math.b2Vec2;
+var b2BodyDef = Box2D.Dynamics.b2BodyDef;
+var b2Body = Box2D.Dynamics.b2Body;
+var b2FixtureDef = Box2D.Dynamics.b2FixtureDef;
+var b2World = Box2D.Dynamics.b2World;
+var b2PolygonShape = Box2D.Collision.Shapes.b2PolygonShape;
+var b2CircleShape = Box2D.Collision.Shapes.b2CircleShape;
+var b2StaticBody = Box2D.Dynamics.b2Body.b2_staticBody;
+var b2DynamicBody = Box2D.Dynamics.b2Body.b2_dynamicBody;
+var b2RevoluteJointDef = Box2D.Dynamics.Joints.b2RevoluteJointDef;
+var b2PrismaticJointDef = Box2D.Dynamics.Joints.b2PrismaticJointDef;
+var b2DistanceJointDef = Box2D.Dynamics.Joints.b2DistanceJointDef;
+var b2FilterData = Box2D.Dynamics.b2FilterData;
+
+// Raise Box2D's speed cap 10x: b2_maxTranslation 2.0 -> 20 m/step = 60 -> 600 m/s at
+// 30 fps (the stock cap makes Rocket/fast-fall cheats misbehave). Browser-only; safe
+// (continuous collision still catches fast bodies; legit play never exceeds ~30 m/s).
+Box2D.Common.b2Settings.b2_maxTranslation = 20.0;
+Box2D.Common.b2Settings.b2_maxTranslationSquared = 20.0 * 20.0;
+
+// p5 helper polyfills (the ones Car/Wheel/Person use that aren't covered by p5)
+function createVector(x, y) { return { x: x, y: y }; }
+function color() { return null; }
+</script>
+
+<!-- Load the unmodified game classes -->
+<script src="Wheel.js"></script>
+<script src="Person.js"></script>
+<script src="Car.js"></script>
+<script src="Ground.js"></script>
+<!-- AI policy / agent interface — keep all model + obs + action logic here -->
+<script src="ai_policy.js"></script>
+
+<!-- Publish the classic-script globals (physics classes, Box2D handles, p5 noise
+     seeder, AI policy factory) onto window.HCR so the ES modules can import them.
+     They live in the classic global LEXICAL scope (class/const) and are otherwise
+     invisible to module scope. The physics files MUST stay classic — they are loaded
+     verbatim into V8 for training and by legacy_neat/. See game/bridge.js. -->
+<script>
+// Physics-playground size knobs (game/tune.js fills in the rest of HCR_TUNE). Browser-
+// only construction wrappers — the physics files stay untouched, and at the defaults
+// (all ×1) every car is built exactly as the unmodified classes build it.
+window.HCR_TUNE = { chassisLen: 1, chassisHt: 1, wheelSize: 1, wheelbase: 1, driverSize: 1 };
+(function () {
+  const TU = window.HCR_TUNE;
+  // Car's constructor assigns these then builds from them: scale on assignment. (Get/set
+  // only — Box2d.js replaces Object.defineProperty with a polyfill that ignores `value`.)
+  [["chassisWidth", "chassisLen"], ["chassisHeight", "chassisHt"], ["wheelSize", "wheelSize"]].forEach(([prop, key]) => {
+    const slot = "_hcr_" + prop;
+    Object.defineProperty(Car.prototype, prop, {
+      get() { return this[slot]; },
+      set(v) { this[slot] = v * TU[key]; },
+    });
+  });
+})();
+const _WheelBase = Wheel, _PersonBase = Person, _CarBase = Car;
+Wheel = class extends _WheelBase {
+  constructor(x, y, r, chassisBody, world) {
+    const k = window.HCR_TUNE.wheelbase;   // move the mount point toward/away from the chassis centre
+    if (k !== 1 && chassisBody) { const cx = chassisBody.GetPosition().x * SCALE; x = cx + (x - cx) * k; }
+    super(x, y, r, chassisBody, world);
+  }
+};
+Person = class extends _PersonBase {
+  constructor(x, y, w, h, world) { const k = window.HCR_TUNE.driverSize; super(x, y, w * k, h * k, world); }
+};
+Car = class extends _CarBase {
+  constructor(...a) { super(...a); if (window.HCR_onCar) window.HCR_onCar(this); }
+};
+</script>
+
+<script>
+window.HCR = {
+  Car: Car, Ground: Ground,
+  Box2D: Box2D, Vec2: Vec2, b2World: b2World, b2StaticBody: b2StaticBody,
+  perlinSeed: _perlinSeed,
+  AiPolicy: AiPolicy,
+};
+</script>
+
+<!-- The game app, split into ES modules under game/ (state, bridge, geom, modes,
+     sim, render, cheats, search, input, main). main.js loads assets + the agent,
+     runs the wall-clock loop, and wires the DOM. -->
+<script type="module" src="game/main.js"></script>
+
+</body>
+</html>
