@@ -1,10 +1,6 @@
 # =============================================================================
-# Root repo .gitignore  (LOCAL-ONLY repo — tracks python/ + docs, no remote)
+# Root .gitignore
 # =============================================================================
-
-# --- web/ is its own git repo (pushes to GitHub -> Vercel). Ignore it entirely
-#     so this root repo never tries to record it as a gitlink/submodule. ---
-/web/
 
 # --- Python virtualenv & bytecode caches ---
 python/.venv/

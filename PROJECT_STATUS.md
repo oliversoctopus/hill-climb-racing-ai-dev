@@ -23,6 +23,14 @@ The docs use several distances/scores that are easy to conflate. This is the can
 
 ---
 
+## 2026-11-06 — Project moved to one repo with a deploy remote
+
+The root repo now tracks `web/` through `git subtree`, with `web/`'s 79 commits imported, so one clone has everything. Vercel still deploys from the existing `web/` repo. `git subtree split --prefix=web` reproduced that repo's head hash exactly, so subtree pushes are fast-forwards. A commit that touches no `web/` file produces nothing to push.
+
+The history was rewritten before publishing. The 2026-09-30 DevTools trace is gone because a trace of a personal Chrome profile records other tabs and installed extensions, and its findings are in that entry. The same entry's description of the machines tried was reworded.
+
+License: Code Bullet's Hill-Climb-Racing-AI repo has no license. GitHub reports none, and its 41 files include no license file, its README is only a title, and its game code has no license text. The repo's MIT license therefore excludes that material (`NOTICE.md`).
+
 ## 2026-10-25 — Record maps: storage quota, notability and expiry
 
 Report: after 332 record maps the game said "no record on this map" on every new map. Cause: every map with any score became a record map and stored its terrain in localStorage (about 14 KB each). localStorage held 5,242,837 of Chrome's 5,242,880 characters, and `_save` swallowed the quota error, so new records were silently dropped.
@@ -189,7 +197,7 @@ Browser:
 
 ```
 Hill-Climb-Racing-AI/          # (canonical map: CLAUDE.md "Repo map (essentials)")
-├── web/                       # deployable static site (own git repo → Vercel);
+├── web/                       # deployable static site (subtree-pushed → Vercel);
 │                              #   *** SINGLE SOURCE of the physics JS *** — js_backend.py
 │                              #   reads web/{Car,Wheel,Person,Ground}.js directly (no root copy)
 │   ├── index.html, ai_policy.js, ai_policy.onnx, policy_meta.json

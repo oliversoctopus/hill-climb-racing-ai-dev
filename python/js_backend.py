@@ -456,9 +456,8 @@ function nudge(dvx, dvy, dav) {
 """
 
 
-# The physics JS is single-sourced in web/ (the deployed static site is its own git
-# repo and must be self-contained, so the one canonical copy lives there and the
-# training path reads it from there — no root duplicate to drift out of sync).
+# The physics JS is single-sourced in web/: the deployed site must be self-contained,
+# so the one copy lives there and training reads it from there.
 _WEB = os.path.join(ROOT, "web")
 
 

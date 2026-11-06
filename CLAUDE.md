@@ -21,7 +21,7 @@ Browser:   web/index.html → web/libraries/ort.min.js + web/ai_policy.onnx
            + web/ai_policy.js + the same physics JS
 ```
 
-`web/` is the deployable static site and its own git repo (GitHub → Vercel). The physics JS lives only in `web/`; `js_backend.py` reads it from there.
+`web/` is the deployable static site. Vercel deploys it from a separate GitHub repo that holds only `web/`. The physics JS lives only in `web/`; `js_backend.py` reads it from there.
 
 ## Running things
 
@@ -72,7 +72,7 @@ python\.venv\Scripts\python.exe python\tests\run.py
 - **Checkpoints regrow fast.** Keep `_final` and any cited snapshot. Prune only with the user's go-ahead: report keepers and prunable, wait, then verify keepers, dry-run, delete.
 - **Before a long training run, restate the exact config** (steps, flags, seeds, direction) and get sign-off.
 - **Same-seed envs do not see the same terrain.** `make_ground`'s reroll loop consumes the global `random` stream, so track identity depends on stream position. `eval.py --ab` is therefore unpaired at `f = 0`. To pair, pin tracks with `random.seed(k)` right before `make_ground(None)` and inject the Ground through an `env._make_ground` patch, as `diagnostics/jitter_probe.py` and `autorun/best_of_k.py` do.
-- **Two repos. "Commit" means commit and push.** `web/` pushes to GitHub → Vercel. The root is local-only and tracks `python/` and docs; it ignores `web/`, checkpoints, tb, logs and result artifacts (`*.npz`, `backtrack_runs/`). Ignored results are not recoverable from git, so don't overwrite them. A change spanning both is one commit in each.
+- **One repo, two remotes. "Commit" means commit and push.** `origin` is the whole project and is public, so a commit goes public when pushed. `web-deploy` holds only `web/` and feeds Vercel. Run `git push origin master`, and when a commit touches `web/`, also `git subtree push --prefix=web web-deploy main`. Don't commit to the `web-deploy` repo directly, or the next subtree push is rejected. The repo ignores checkpoints, tb, logs and result artifacts (`*.npz`, `backtrack_runs/`). Ignored results are not recoverable from git, so don't overwrite them.
 - **Check PROJECT_STATUS *TL;DR* before proposing an experiment.** Most ideas have been tested negative.
 
 ## Current state
@@ -86,7 +86,7 @@ python\.venv\Scripts\python.exe python\tests\run.py
 ## Repo map
 
 ```
-web/                   deployable site (own repo). index.html = markup + p5/Box2D compat
+web/                   deployable site. index.html = markup + p5/Box2D compat
   game/*.js            shim + window.HCR bridge + game/main.js (ES modules: sim, render,
                        search, records, tune = playground, dev = password-gated dev mode,
                        humanruns = dev-mode recorder of your own runs)
@@ -106,4 +106,5 @@ analysis_artifacts/    one-off diagnostic outputs; not load-bearing
 PROJECT_STATUS.md      results, experiment log, reasoning
 CONVENTIONS.md         coding conventions
 HOW_TO_PLAY.md         serving and playing the browser game
+LICENSE, NOTICE.md     MIT for original code; NOTICE lists what it doesn't cover
 ```

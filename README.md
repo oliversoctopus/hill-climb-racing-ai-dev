@@ -36,9 +36,13 @@ python\.venv\Scripts\python.exe python\tests\test_obs_parity.py
 python\.venv\Scripts\python.exe python\tests\test_saverestore.py
 ```
 
-## Repo structure (two git repos)
+## Repo structure
 
-- **`web/`** is its own git repo → pushed to GitHub → deployed by Vercel. It is the **single source of the physics JS** (`Car/Wheel/Person/Ground.js` + `libraries/Box2d.js`); the Python training path reads those files directly.
-- The **repo root** is a separate, **local-only** git repo tracking `python/` + the docs. (`web/` is gitignored by the root repo so the two don't interfere.)
+- **`web/`** is the deployable site and the **single source of the physics JS** (`Car/Wheel/Person/Ground.js` + `libraries/Box2d.js`); the Python training path reads those files directly.
+- This repo holds everything. Vercel deploys from a separate GitHub repo containing only `web/`, updated with `git subtree push --prefix=web web-deploy main`.
 
 See CLAUDE.md "Repo map (essentials)" for the full layout.
+
+## License
+
+Original code is under the [MIT license](LICENSE). Code Bullet's game code and assets and the third-party libraries are not; [NOTICE.md](NOTICE.md) lists them.
