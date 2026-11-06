@@ -40,7 +40,7 @@ Fix (`web/game/records.js`, rules in `web/game/records_rules.js`):
 
 Report: during human play the page freezes for 0.1–0.25 s every minute or so, on every machine and Chrome profile tried. **In an Incognito window (no extensions) the freezes went away** over 3 min of play. No code change.
 
-A DevTools Performance trace of the live site (107 s of human play, personal profile; `analysis_artifacts/Trace-20260930T193758.json.gz`) located each freeze:
+A DevTools Performance trace of the live site (107 s of human play, personal profile; not kept) located each freeze:
 
 | time | on screen | cause |
 |---|---|---|
